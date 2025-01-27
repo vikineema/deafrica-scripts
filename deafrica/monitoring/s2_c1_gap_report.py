@@ -109,6 +109,7 @@ def generate_buckets_diff(
 
     # Write source keys to text file for debugging
     import fsspec
+
     fs = fsspec.filesystem("file")
     fs.mkdirs(path="/tmp/", exist_ok=True)
     with fs.open("/tmp/s2_c1_source_keys.txt", "w") as file:
@@ -137,6 +138,7 @@ def generate_buckets_diff(
 
         # Write destination keys to text file for debugging
         import fsspec
+
         fs = fsspec.filesystem("file")
         fs.mkdirs(path="/tmp/", exist_ok=True)
         with fs.open("/tmp/s2_c1_destination_keys_keys.txt", "w") as file:
