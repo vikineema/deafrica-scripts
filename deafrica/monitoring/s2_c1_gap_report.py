@@ -56,9 +56,8 @@ def get_and_filter_cogs_keys():
         for key in source_keys
         if (
             key.key.split("/")[-2].split("_")[1].lstrip("T") in africa_tile_ids
-            # We need to ensure we're ignoring the old format data
-            # and re.match(r"sentinel-s2-l2a-cogs/\d{4}/", key.Key) is None
             and "tileinfo_metadata.json" not in key.key
+            and "tileInfo.json" not in key.key
         )
     )
 
@@ -108,6 +107,15 @@ def generate_buckets_diff(
     # Retrieve keys from inventory bucket
     source_keys = get_and_filter_cogs_keys()
 
+    # Write source keys to text file for debugging
+    import fsspec
+
+    fs = fsspec.filesystem("file")
+    fs.mkdirs(path="/tmp/", exist_ok=True)
+    with fs.open("/tmp/s2_c1_source_keys.txt", "w") as file:
+        for item in list(source_keys):
+            file.write(f"{item}\n")
+
     output_filename = "No missing scenes were found"
 
     if update_stac:
@@ -127,6 +135,16 @@ def generate_buckets_diff(
                 n_threads=200,
             )
         )
+
+        # Write destination keys to text file for debugging
+        import fsspec
+
+        fs = fsspec.filesystem("file")
+        fs.mkdirs(path="/tmp/", exist_ok=True)
+        with fs.open("/tmp/s2_c1_destination_keys_keys.txt", "w") as file:
+            for item in list(destination_keys):
+                file.write(f"{item}\n")
+
         log.info(f"Retrieving keys from odc")
         all_odc_values = get_odc_keys(log)
         indexed_keys = all_odc_values.keys()
