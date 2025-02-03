@@ -146,7 +146,7 @@ def prepare_message(
 def send_messages(
     idx: int,
     queue_name: str,
-    c: int = 1,
+    max_workers: int = 1,
     product_name: str = "s2_l2a_c1",
     limit: int = None,
     slack_url: str = None,
