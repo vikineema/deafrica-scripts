@@ -8,12 +8,12 @@ from rasterio.session import AWSSession
 import requests
 import ntpath
 import os
-
+from pyproj import Proj, transform as reproj
+from shapely import geometry
 import click
 from odc.aws import s3_fetch, s3_client
 from odc.aws.queue import get_queue, publish_messages
-from stac_sentinel import sentinel_s2_l2a
-
+from dateutil.parser import parse
 from deafrica import __version__
 from deafrica.utils import (
     find_latest_report,
@@ -26,11 +26,116 @@ from deafrica.utils import (
 
 SOURCE_REGION = "us-west-2"
 S3_BUCKET_PATH = "s3://deafrica-sentinel-2/status-report/"
-
+STAC_VERSION = "1.0.0-beta.2"
 import warnings
 
 # supress a FutureWarning from pyproj
 warnings.simplefilter(action="ignore", category=FutureWarning)
+
+
+def get_collection(collection_id):
+    """
+    Get STAC Collection JSON
+    Adapted from https://github.com/stac-utils/stac-sentinel/blob/main/stac_sentinel/sentinel.py
+    """
+    filename = os.path.join(os.path.dirname(__file__), "%s.json" % collection_id)
+    collection = json.loads(open(filename).read())
+    return collection
+
+
+def sentinel_s2(metadata):
+    """
+    Parse tileInfo.json and return basic Item
+    Adapted from https://github.com/stac-utils/stac-sentinel/blob/main/stac_sentinel/sentinel.py
+    """
+    dt = parse(metadata["timestamp"])
+    epsg = metadata["tileOrigin"]["crs"]["properties"]["name"].split(":")[-1]
+    native_coordinates = metadata["tileDataGeometry"]["coordinates"]
+    ys = [c[1] for c in native_coordinates[0]]
+    xs = [c[0] for c in native_coordinates[0]]
+    p1 = Proj(init="epsg:%s" % epsg)
+    p2 = Proj(init="epsg:4326")
+    lons, lats = reproj(p1, p2, xs, ys)
+    bbox = [min(lons), min(lats), max(lons), max(lats)]
+    coordinates = [[[lons[i], lats[i]] for i in range(0, len(lons))]]
+    geom = geometry.mapping(geometry.Polygon(coordinates[0]).convex_hull)
+
+    # Item properties
+    props = {
+        "datetime": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "platform": "sentinel-2%s" % metadata["productName"][2].lower(),
+        "constellation": "sentinel-2",
+        "instruments": ["msi"],
+        "gsd": 10,
+        "view:off_nadir": 0,
+        "proj:epsg": int(epsg),
+        "sentinel:utm_zone": metadata["utmZone"],
+        "sentinel:latitude_band": metadata["latitudeBand"],
+        "sentinel:grid_square": metadata["gridSquare"],
+        "sentinel:sequence": metadata["path"].split("/")[-1],
+        "sentinel:product_id": metadata["productName"],
+    }
+    if "dataCoveragePercentage" in metadata:
+        props["sentinel:data_coverage"] = float(metadata["dataCoveragePercentage"])
+    if "cloudyPixelPercentage" in metadata:
+        props["eo:cloud_cover"] = float(metadata["cloudyPixelPercentage"])
+
+    sid = str(metadata["utmZone"]) + metadata["latitudeBand"] + metadata["gridSquare"]
+    level = metadata["datastrip"]["id"].split("_")[3]
+    id = "%s_%s_%s_%s_%s" % (
+        metadata["productName"][0:3],
+        sid,
+        dt.strftime("%Y%m%d"),
+        props["sentinel:sequence"],
+        level,
+    )
+    item = {
+        "type": "Feature",
+        "stac_version": STAC_VERSION,
+        "stac_extensions": ["eo", "view", "proj"],
+        "id": id,
+        "bbox": bbox,
+        "geometry": geom,
+        "properties": props,
+    }
+    return item
+
+
+def sentinel_s2_l2a(metadata, base_url=""):
+    """
+    Generate new STAC metadata.
+    Adapted from https://github.com/stac-utils/stac-sentinel/blob/main/stac_sentinel/sentinel.py
+    """
+    collection_id = "sentinel-s2-l2a"
+    item = sentinel_s2(metadata)
+    item["collection"] = collection_id
+    assets = get_collection(collection_id)["item_assets"]
+    # get link back to l1c data
+    s2_l1c_base_url = base_url.replace("sentinel-s2-l2a", "sentinel-s2-l1c")
+    assets["thumbnail"]["href"] = os.path.join(s2_l1c_base_url, "preview.jpg")
+    assets["info"]["href"] = os.path.join(base_url, "tileInfo.json")
+    assets["metadata"]["href"] = os.path.join(base_url, "metadata.xml")
+    assets["overview"]["href"] = os.path.join(base_url, "qi/L2A_PVI.jp2")
+    assets["visual"]["href"] = os.path.join(base_url, "R10m/TCI.jp2")
+    assets["B02"]["href"] = os.path.join(base_url, "R10m/B02.jp2")
+    assets["B03"]["href"] = os.path.join(base_url, "R10m/B03.jp2")
+    assets["B04"]["href"] = os.path.join(base_url, "R10m/B04.jp2")
+    assets["B08"]["href"] = os.path.join(base_url, "R10m/B08.jp2")
+    assets["AOT"]["href"] = os.path.join(base_url, "R60m/AOT.jp2")
+    assets["WVP"]["href"] = os.path.join(base_url, "R10m/WVP.jp2")
+    assets["visual_20m"]["href"] = os.path.join(base_url, "R20m/TCI.jp2")
+    assets["B05"]["href"] = os.path.join(base_url, "R20m/B05.jp2")
+    assets["B06"]["href"] = os.path.join(base_url, "R20m/B06.jp2")
+    assets["B07"]["href"] = os.path.join(base_url, "R20m/B07.jp2")
+    assets["B8A"]["href"] = os.path.join(base_url, "R20m/B8A.jp2")
+    assets["B11"]["href"] = os.path.join(base_url, "R20m/B11.jp2")
+    assets["B12"]["href"] = os.path.join(base_url, "R20m/B12.jp2")
+    assets["SCL"]["href"] = os.path.join(base_url, "R20m/SCL.jp2")
+    assets["visual_60m"]["href"] = os.path.join(base_url, "R60m/TCI.jp2")
+    assets["B01"]["href"] = os.path.join(base_url, "R60m/B01.jp2")
+    assets["B09"]["href"] = os.path.join(base_url, "R60m/B09.jp2")
+    item["assets"] = assets
+    return item
 
 
 def get_cog_shape_transform(cog_url: str):
