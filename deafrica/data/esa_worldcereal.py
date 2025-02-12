@@ -168,8 +168,7 @@ def esa_worldcereal_download_stac_cog(year, season, product, product_type, s3_ds
         )
         log.info(f"COG written to {out_cog}")
 
-        ## Create and upload STAC
-        break
+        # Create and upload STAC
 
 
 @click.command("download-worldcereal-product")
