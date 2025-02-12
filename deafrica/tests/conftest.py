@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from urlpath import URL
+from yarl import URL
 
 REGION = "af-south-1"
 TEST_BUCKET_NAME = "test-bucket"

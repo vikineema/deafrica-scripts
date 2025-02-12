@@ -14,7 +14,7 @@ from deafrica.utils import AFRICA_BBOX, setup_logging
 from odc.aws import s3_dump, s3_head_object
 from deafrica.utils import odc_uuid
 from rio_stac import create_stac_item
-from urlpath import URL
+from yarl import URL
 
 """
 Download ESA Climate Change Initiative 300m Landcover from

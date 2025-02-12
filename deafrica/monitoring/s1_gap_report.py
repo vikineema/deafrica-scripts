@@ -6,7 +6,7 @@ from odc.aws import s3_dump, s3_client, s3_ls_dir
 import geopandas as gpd
 import datetime
 from sentinelhub import SHConfig, SentinelHubCatalog, Geometry, DataCollection
-from urlpath import URL
+from yarl import URL
 import os
 from deafrica.utils import (
     slack_url,
