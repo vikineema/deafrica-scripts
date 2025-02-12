@@ -173,8 +173,8 @@ def esa_worldcereal_download_stac_cog(year, season, product, product_type, s3_ds
 
 @click.command("download-worldcereal-product")
 @click.option("--year", required=True, default="2021")
-@click.option("--season", required=True, default="tc-wintercereals")
-@click.option("--product", required=True, default="wintercereals")
+@click.option("--season", required=True)
+@click.option("--product", required=True)
 @click.option("--product-type", required=True, default="classification")
 @click.option("--s3_dst", default="s3://deafrica-data-dev-af/esa_worldcereal_sample/")
 def cli(year, season, product, product_type, s3_dst):
