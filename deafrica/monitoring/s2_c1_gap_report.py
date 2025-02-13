@@ -1,5 +1,4 @@
 import json
-import re
 from datetime import datetime, date, timedelta
 from textwrap import dedent
 
@@ -127,7 +126,7 @@ def generate_buckets_diff(
             )
         )
 
-        log.info(f"Retrieving keys from odc")
+        log.info("Retrieving keys from odc")
         all_odc_values = get_odc_keys(log)
         indexed_keys = all_odc_values.keys()
 
