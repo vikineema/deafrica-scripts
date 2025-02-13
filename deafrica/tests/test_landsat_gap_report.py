@@ -3,7 +3,7 @@ from unittest.mock import patch, PropertyMock
 import boto3
 from click.testing import CliRunner
 from moto import mock_s3
-from yarl import URL
+from urlpath import URL
 
 from deafrica.monitoring.landsat_gap_report import (
     get_and_filter_keys_from_files,

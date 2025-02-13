@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 import boto3
 from moto import mock_s3
-from yarl import URL
+from urlpath import URL
 
 from deafrica.monitoring import s2_gap_report
 from deafrica.monitoring.s2_gap_report import (

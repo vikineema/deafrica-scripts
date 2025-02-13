@@ -7,7 +7,7 @@ import click
 import pandas as pd
 from odc.aws import s3_dump, s3_client
 from odc.aws.inventory import list_inventory
-from yarl import URL
+from urlpath import URL
 from deafrica import __version__
 
 from deafrica.utils import (

@@ -19,7 +19,7 @@ from textwrap import dedent
 import click
 import pandas as pd
 from odc.aws import s3_dump, s3_client
-from yarl import URL
+from urlpath import URL
 
 from deafrica import __version__
 from deafrica.utils import (
