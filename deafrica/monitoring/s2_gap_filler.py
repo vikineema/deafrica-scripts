@@ -8,7 +8,7 @@ from rasterio.session import AWSSession
 import requests
 import ntpath
 import os
-from pyproj import Proj, transform as reproj
+from pyproj import CRS, Transformer
 from shapely import geometry
 import click
 from odc.aws import s3_fetch, s3_client
@@ -53,9 +53,10 @@ def sentinel_s2(metadata):
     native_coordinates = metadata["tileDataGeometry"]["coordinates"]
     ys = [c[1] for c in native_coordinates[0]]
     xs = [c[0] for c in native_coordinates[0]]
-    p1 = Proj(init="epsg:%s" % epsg)
-    p2 = Proj(init="epsg:4326")
-    lons, lats = reproj(p1, p2, xs, ys)
+    p1 = CRS("epsg:%s" % epsg)
+    p2 = CRS("epsg:4326")
+    transformer = Transformer.from_crs(p1, p2)
+    lons, lats = transformer.transform(xs, ys)
     bbox = [min(lons), min(lats), max(lons), max(lats)]
     coordinates = [[[lons[i], lats[i]] for i in range(0, len(lons))]]
     geom = geometry.mapping(geometry.Polygon(coordinates[0]).convex_hull)
