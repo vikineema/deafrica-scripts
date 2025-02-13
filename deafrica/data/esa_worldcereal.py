@@ -138,8 +138,8 @@ def esa_worldcereal_download_stac_cog(year, season, product, product_type, s3_ds
         )
 
         # Define output files
-        out_cog = URL(s3_dst) / str(year) / aez_id / f"{filename}.tif"
-        # out_stac = URL(s3_dst) / str(year) / aez_id / f"{filename}.stac-item.json"
+        out_cog = URL(s3_dst) / str(product) / str(season) / str(aez_id) / str(year) / f"{filename}.tif"
+        # out_stac = URL(s3_dst) / str(product) / str(season) / str(aez_id) / str(year) / f"{filename}.stac-item.json"
 
         # Create and upload COG
         da = rioxarray.open_rasterio(local_geotiff).squeeze(dim="band")
