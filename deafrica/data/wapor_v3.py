@@ -12,23 +12,26 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 import click
+import fsspec
+import gcsfs
 import pandas as pd
 import requests
+import s3fs
 from dateutil.relativedelta import relativedelta
 from eodatasets3.images import ValidDataMethod
 from eodatasets3.model import DatasetDoc
-from eodatasets3.serialise import to_path
+from eodatasets3.serialise import to_path  # noqa F401
 from eodatasets3.stac import to_stac_item
+from fsspec.implementations.local import LocalFileSystem
+from gcsfs import GCSFileSystem
 from odc.aws import s3_dump
+from s3fs.core import S3FileSystem
 
 from deafrica.easi_assemble import EasiPrepare
 from deafrica.utils import (
     odc_uuid,
     setup_logging,
 )
-
-BASE_URL = "https://data.apps.fao.org/gismgr/api/v2/catalog/workspaces/WAPOR-3/mapsets"
-
 
 # Set log level to info
 log = setup_logging()
@@ -46,10 +49,84 @@ def is_url(path: str) -> bool:
     return path.startswith("http://") or path.startswith("https://")
 
 
+def get_filesystem(
+    path: str,
+    anon: bool = True,
+) -> S3FileSystem | LocalFileSystem | GCSFileSystem:
+    if is_s3_path(path=path):
+        fs = s3fs.S3FileSystem(
+            anon=anon, s3_additional_kwargs={"ACL": "bucket-owner-full-control"}
+        )
+    elif is_gcsfs_path(path=path):
+        if anon:
+            fs = gcsfs.GCSFileSystem(token="anon")
+        else:
+            fs = gcsfs.GCSFileSystem()
+    else:
+        fs = fsspec.filesystem("file")
+    return fs
+
+
+def check_file_exists(path: str) -> bool:
+    fs = get_filesystem(path=path, anon=True)
+    if fs.exists(path) and fs.isfile(path):
+        return True
+    else:
+        return False
+
+
+def check_directory_exists(path: str) -> bool:
+    fs = get_filesystem(path=path, anon=True)
+    if fs.exists(path) and fs.isdir(path):
+        return True
+    else:
+        return False
+
+
+def check_file_extension(path: str, accepted_file_extensions: list[str]) -> bool:
+    _, file_extension = os.path.splitext(path)
+    if file_extension.lower() in accepted_file_extensions:
+        return True
+    else:
+        return False
+
+
+def is_geotiff(path: str) -> bool:
+    accepted_geotiff_extensions = [".tif", ".tiff", ".gtiff"]
+    return check_file_extension(
+        path=path, accepted_file_extensions=accepted_geotiff_extensions
+    )
+
+
+def find_geotiff_files(directory_path: str, file_name_pattern: str = ".*") -> list[str]:
+    file_name_pattern = re.compile(file_name_pattern)
+
+    fs = get_filesystem(path=directory_path, anon=True)
+
+    geotiff_file_paths = []
+
+    for root, dirs, files in fs.walk(directory_path):
+        for file_name in files:
+            if is_geotiff(path=file_name):
+                if re.search(file_name_pattern, file_name):
+                    geotiff_file_paths.append(os.path.join(root, file_name))
+                else:
+                    continue
+            else:
+                continue
+
+    if is_s3_path(path=directory_path):
+        geotiff_file_paths = [f"s3://{file}" for file in geotiff_file_paths]
+    elif is_gcsfs_path(path=directory_path):
+        geotiff_file_paths = [f"gs://{file}" for file in geotiff_file_paths]
+    return geotiff_file_paths
+
+
 def get_WaPORv3_info(url: str) -> pd.DataFrame:
     """
-    Get information on WaPOR v3 data. WaPOR v3 variables are stored in `mapsets`,
-    which in turn contain `rasters` that contain the data for a particular date or period.
+    Get information on WaPOR v3 data from the api url.
+    WaPOR v3 variables are stored in `mapsets`, which in turn contain
+    `rasters` that contain the data for a particular date or period.
 
     Parameters
     ----------
@@ -83,11 +160,31 @@ def get_WaPORv3_info(url: str) -> pd.DataFrame:
     return output_df
 
 
-def get_mapset_rasters(wapor_v3_mapset_code: str) -> list[str]:
-    wapor_v3_mapset_url = os.path.join(BASE_URL, wapor_v3_mapset_code, "rasters")
+def get_mapset_rasters_from_api(wapor_v3_mapset_code: str) -> list[str]:
+    base_url = (
+        "https://data.apps.fao.org/gismgr/api/v2/catalog/workspaces/WAPOR-3/mapsets"
+    )
+    wapor_v3_mapset_url = os.path.join(base_url, wapor_v3_mapset_code, "rasters")
     wapor_v3_mapset_rasters = get_WaPORv3_info(wapor_v3_mapset_url)[
         "downloadUrl"
     ].to_list()
+    return wapor_v3_mapset_rasters
+
+
+def get_mapset_rasters_from_gsutil_uri(wapor_v3_mapset_code: str) -> list[str]:
+    base_url = "gs://fao-gismgr-wapor-3-data/DATA/WAPOR-3/MAPSET/"
+    wapor_v3_mapset_url = os.path.join(base_url, wapor_v3_mapset_code)
+    wapor_v3_mapset_rasters = find_geotiff_files(directory_path=wapor_v3_mapset_url)
+    return wapor_v3_mapset_rasters
+
+
+def get_mapset_rasters(wapor_v3_mapset_code: str) -> list[str]:
+    try:
+        wapor_v3_mapset_rasters = get_mapset_rasters_from_api(wapor_v3_mapset_code)
+    except Exception:
+        wapor_v3_mapset_rasters = get_mapset_rasters_from_gsutil_uri(
+            wapor_v3_mapset_code
+        )
     log.info(
         f"Found {len(wapor_v3_mapset_rasters)} rasters for the mapset {wapor_v3_mapset_code}"
     )
