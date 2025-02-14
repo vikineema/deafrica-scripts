@@ -462,7 +462,7 @@ def cli(
 
         # Fix links in stac item
         assets = stac_item["assets"]
-        for band in assets.key():
+        for band in assets.keys():
             band_url = assets[band]["href"]
             if band_url.startswith("gs://"):
                 new_band_url = band_url.replace(
