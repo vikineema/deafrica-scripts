@@ -344,7 +344,7 @@ def cli(
             )
         )
         if product_name == "wapor_soil_moisture":
-            dataset_doc = prepare_wapor_soil_moisture_dataset.prepare_dataset(
+            dataset_doc = prepare_wapor_soil_moisture_dataset(
                 dataset_path=dataset_path,
                 product_yaml=product_yaml,
                 output_path=metadata_output_path,
