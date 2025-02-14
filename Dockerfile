@@ -4,7 +4,8 @@ ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt\
     DEBIAN_FRONTEND=noninteractive \
     LC_ALL=C.UTF-8 \
     LANG=C.UTF-8 \
-    USE_PYGEOS=0
+    USE_PYGEOS=0 \
+    GS_NO_SIGN_REQUEST=YES
 
 RUN apt-get update \
     && apt-get install -y \
