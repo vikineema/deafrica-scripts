@@ -54,7 +54,7 @@ WORKDIR /code
 COPY . /code/
 
 RUN python -m pip install --upgrade pip pip-tools
-#RUN pip-compile --output-file=requirements.txt --upgrade --verbose
+# RUN pip-compile --output-file=requirements.txt --upgrade --verbose
 # Install required python packages
 RUN pip install --no-cache-dir -r requirements.txt 
 RUN pip install /code

@@ -4,53 +4,107 @@
 #
 #    pip-compile --output-file=requirements.txt
 #
+adlfs==2024.12.0
+    # via fsspec
 aenum==3.1.15
     # via sentinelhub
 affine==2.4.0
     # via
     #   datacube
+    #   eodatasets3
     #   odc-algo
     #   odc-geo
     #   odc-stac
     #   rasterio
+aiohappyeyeballs==2.4.6
+    # via aiohttp
+aiohttp==3.11.12
+    # via
+    #   adlfs
+    #   fsspec
+    #   gcsfs
+aiosignal==1.3.2
+    # via aiohttp
 annotated-types==0.7.0
     # via pydantic
+async-timeout==5.0.1
+    # via aiohttp
 attrs==25.1.0
     # via
+    #   aiohttp
+    #   cattrs
     #   datacube
     #   datapi
+    #   eodatasets3
+    #   fiona
     #   jsonschema
     #   morecantile
     #   rasterio
     #   referencing
-boto3==1.36.19
+azure-core==1.32.0
+    # via
+    #   adlfs
+    #   azure-identity
+    #   azure-storage-blob
+azure-datalake-store==0.0.53
+    # via adlfs
+azure-identity==1.20.0
+    # via adlfs
+azure-storage-blob==12.24.1
+    # via adlfs
+bcrypt==4.2.1
+    # via paramiko
+bleach==6.2.0
+    # via panel
+bokeh==3.6.3
+    # via panel
+boltons==25.0.0
+    # via eodatasets3
+boto3==1.36.21
     # via
     #   deafrica (setup.py)
+    #   eodatasets3
     #   odc-cloud
-botocore==1.36.19
+botocore==1.36.21
     # via
     #   boto3
+    #   eodatasets3
     #   odc-cloud
+    #   s3fs
     #   s3transfer
 cachetools==5.5.1
     # via
     #   datacube
     #   google-auth
     #   odc-geo
+cattrs==24.1.2
+    # via eodatasets3
 cdsapi==0.7.5
     # via deafrica (setup.py)
 certifi==2025.1.31
     # via
+    #   fiona
     #   kubernetes
     #   netcdf4
+    #   oci
     #   pyogrio
     #   pyproj
     #   rasterio
     #   requests
+cffi==1.17.1
+    # via
+    #   azure-datalake-store
+    #   cryptography
+    #   pygit2
+    #   pynacl
 cftime==1.6.4.post1
     # via netcdf4
 charset-normalizer==3.4.1
     # via requests
+circuitbreaker==2.0.0
+    # via oci
+ciso8601==2.3.2
+    # via eodatasets3
 click==8.1.8
     # via
     #   click-plugins
@@ -59,24 +113,44 @@ click==8.1.8
     #   datacube
     #   deafrica (setup.py)
     #   distributed
+    #   eodatasets3
+    #   fiona
     #   rasterio
     #   rio-cogeo
     #   sentinelhub
 click-plugins==1.1.1
-    # via rasterio
+    # via
+    #   fiona
+    #   rasterio
 cligj==0.7.2
-    # via rasterio
+    # via
+    #   fiona
+    #   rasterio
 cloudpickle==3.1.1
     # via
     #   dask
     #   datacube
     #   distributed
+contourpy==1.3.1
+    # via bokeh
+cryptography==44.0.1
+    # via
+    #   azure-identity
+    #   azure-storage-blob
+    #   msal
+    #   oci
+    #   paramiko
+    #   pyjwt
+    #   pyopenssl
+    #   pyspnego
+    #   smbprotocol
 dask[array,dataframe]==2024.10.0
     # via
     #   dask-expr
     #   dask-image
     #   datacube
     #   distributed
+    #   fsspec
     #   odc-algo
     #   odc-stac
 dask-expr==1.1.16
@@ -88,43 +162,112 @@ dataclasses-json==0.6.7
 datacube==1.8.20
     # via
     #   deafrica (setup.py)
+    #   eodatasets3
     #   odc-algo
 datapi==0.2.0
     # via cdsapi
+decorator==5.1.1
+    # via gcsfs
+defusedxml==0.7.1
+    # via eodatasets3
 deprecat==2.1.3
     # via datacube
 distributed==2024.10.0
     # via
     #   datacube
+    #   fsspec
     #   odc-algo
+dropbox==12.0.2
+    # via
+    #   dropboxdrivefs
+    #   fsspec
+dropboxdrivefs==1.4.1
+    # via fsspec
 durationpy==0.9
     # via kubernetes
-fsspec==2025.2.0
-    # via dask
+eodatasets3==0.30.9
+    # via deafrica (setup.py)
+exceptiongroup==1.2.2
+    # via cattrs
+fiona==1.10.1
+    # via eodatasets3
+frozenlist==1.5.0
+    # via
+    #   aiohttp
+    #   aiosignal
+fsspec[full]==2025.2.0
+    # via
+    #   adlfs
+    #   dask
+    #   deafrica (setup.py)
+    #   dropboxdrivefs
+    #   gcsfs
+    #   ocifs
+    #   s3fs
+fusepy==3.0.1
+    # via fsspec
+gcsfs==2025.2.0
+    # via
+    #   deafrica (setup.py)
+    #   fsspec
 geoalchemy2==0.17.0
     # via datacube
 geopandas==1.0.1
     # via deafrica (setup.py)
+google-api-core==2.24.1
+    # via
+    #   google-cloud-core
+    #   google-cloud-storage
 google-auth==2.38.0
-    # via kubernetes
+    # via
+    #   gcsfs
+    #   google-api-core
+    #   google-auth-oauthlib
+    #   google-cloud-core
+    #   google-cloud-storage
+    #   kubernetes
+google-auth-oauthlib==1.2.1
+    # via gcsfs
+google-cloud-core==2.4.1
+    # via google-cloud-storage
+google-cloud-storage==3.0.0
+    # via gcsfs
+google-crc32c==1.6.0
+    # via
+    #   google-cloud-storage
+    #   google-resumable-media
+google-resumable-media==2.7.2
+    # via google-cloud-storage
+googleapis-common-protos==1.67.0
+    # via google-api-core
 greenlet==3.1.1
     # via sqlalchemy
+h5py==3.12.1
+    # via eodatasets3
 idna==3.10
-    # via requests
+    # via
+    #   requests
+    #   yarl
 imageio==2.37.0
     # via
     #   pims
     #   scikit-image
 importlib-metadata==8.6.1
     # via dask
+isodate==0.7.2
+    # via azure-storage-blob
 jinja2==3.1.5
-    # via distributed
+    # via
+    #   bokeh
+    #   distributed
 jmespath==1.0.1
     # via
     #   boto3
     #   botocore
 jsonschema==4.23.0
-    # via datacube
+    # via
+    #   datacube
+    #   eodatasets3
 jsonschema-specifications==2024.10.1
     # via jsonschema
 kubernetes==32.0.0
@@ -133,18 +276,43 @@ lark==1.2.2
     # via datacube
 lazy-loader==0.4
     # via scikit-image
+libarchive-c==5.1
+    # via fsspec
+linkify-it-py==2.0.3
+    # via panel
 locket==1.0.0
     # via
     #   distributed
     #   partd
+markdown==3.7
+    # via panel
+markdown-it-py==3.0.0
+    # via
+    #   mdit-py-plugins
+    #   panel
 markupsafe==3.0.2
     # via jinja2
 marshmallow==3.26.1
     # via dataclasses-json
+mdit-py-plugins==0.4.2
+    # via panel
+mdurl==0.1.2
+    # via markdown-it-py
 morecantile==6.2.0
     # via rio-cogeo
+msal==1.31.1
+    # via
+    #   azure-datalake-store
+    #   azure-identity
+    #   msal-extensions
+msal-extensions==1.2.0
+    # via azure-identity
 msgpack==1.1.0
     # via distributed
+multidict==6.1.0
+    # via
+    #   aiohttp
+    #   yarl
 multiurl==0.3.3
     # via datapi
 mypy-extensions==1.0.0
@@ -157,11 +325,15 @@ numexpr==2.10.2
     # via odc-algo
 numpy==1.26.4
     # via
+    #   bokeh
     #   cftime
+    #   contourpy
     #   dask
     #   dask-image
     #   datacube
+    #   eodatasets3
     #   geopandas
+    #   h5py
     #   imageio
     #   netcdf4
     #   numexpr
@@ -184,6 +356,10 @@ oauthlib==3.2.2
     #   kubernetes
     #   requests-oauthlib
     #   sentinelhub
+oci==2.144.1
+    # via ocifs
+ocifs==1.3.1
+    # via fsspec
 odc-algo==0.2.3
     # via deafrica (setup.py)
 odc-cloud==0.2.5
@@ -194,6 +370,7 @@ odc-stac==0.3.11
     # via deafrica (setup.py)
 packaging==24.2
     # via
+    #   bokeh
     #   dask
     #   datacube
     #   distributed
@@ -201,6 +378,7 @@ packaging==24.2
     #   geopandas
     #   lazy-loader
     #   marshmallow
+    #   panel
     #   pims
     #   pyogrio
     #   rioxarray
@@ -209,6 +387,7 @@ packaging==24.2
     #   xarray
 pandas==2.1.4
     # via
+    #   bokeh
     #   dask
     #   dask-expr
     #   dask-image
@@ -216,17 +395,42 @@ pandas==2.1.4
     #   deafrica (setup.py)
     #   geopandas
     #   odc-stac
+    #   panel
     #   xarray
+panel==1.6.1
+    # via fsspec
+param==2.2.0
+    # via
+    #   panel
+    #   pyviz-comms
+paramiko==3.5.1
+    # via fsspec
 partd==1.4.2
     # via dask
 pillow==11.1.0
     # via
+    #   bokeh
     #   imageio
     #   scikit-image
     #   sentinelhub
 pims==0.7
     # via dask-image
-psutil==6.1.1
+ply==3.11
+    # via stone
+portalocker==2.10.1
+    # via msal-extensions
+propcache==0.2.1
+    # via
+    #   aiohttp
+    #   yarl
+proto-plus==1.26.0
+    # via google-api-core
+protobuf==5.29.3
+    # via
+    #   google-api-core
+    #   googleapis-common-protos
+    #   proto-plus
+psutil==7.0.0
     # via distributed
 psycopg2==2.9.10
     # via datacube
@@ -234,33 +438,50 @@ pyarrow==19.0.0
     # via
     #   dask-expr
     #   deafrica (setup.py)
+    #   fsspec
 pyasn1==0.6.1
     # via
     #   pyasn1-modules
     #   rsa
 pyasn1-modules==0.4.1
     # via google-auth
+pycparser==2.22
+    # via cffi
 pydantic==2.10.6
     # via
     #   morecantile
     #   rio-cogeo
 pydantic-core==2.27.2
     # via pydantic
+pygit2==1.17.0
+    # via fsspec
+pyjwt[crypto]==2.10.1
+    # via
+    #   msal
+    #   pyjwt
+pynacl==1.5.0
+    # via paramiko
 pyogrio==0.10.0
     # via geopandas
+pyopenssl==24.3.0
+    # via oci
 pyparsing==3.2.1
     # via rasterio
 pyproj==3.7.0
     # via
     #   datacube
+    #   eodatasets3
     #   geopandas
     #   morecantile
     #   odc-geo
     #   rioxarray
     #   sentinelhub
+pyspnego==0.11.2
+    # via smbprotocol
 pystac==1.12.1
     # via
     #   deafrica (setup.py)
+    #   eodatasets3
     #   odc-stac
     #   rio-stac
 python-dateutil==2.9.0.post0
@@ -269,15 +490,22 @@ python-dateutil==2.9.0.post0
     #   datacube
     #   kubernetes
     #   multiurl
+    #   oci
     #   pandas
     #   pystac
     #   sentinelhub
+python-rapidjson==1.20
+    # via eodatasets3
 pytz==2025.1
     # via
     #   multiurl
+    #   oci
     #   pandas
+pyviz-comms==3.0.4
+    # via panel
 pyyaml==6.0.2
     # via
+    #   bokeh
     #   dask
     #   datacube
     #   distributed
@@ -286,6 +514,7 @@ rasterio==1.4.3
     # via
     #   datacube
     #   deafrica (setup.py)
+    #   eodatasets3
     #   odc-algo
     #   odc-stac
     #   rio-cogeo
@@ -297,16 +526,28 @@ referencing==0.36.2
     #   jsonschema-specifications
 requests==2.32.3
     # via
+    #   azure-core
+    #   azure-datalake-store
     #   cdsapi
     #   datapi
     #   deafrica (setup.py)
+    #   dropbox
+    #   dropboxdrivefs
+    #   fsspec
+    #   gcsfs
+    #   google-api-core
+    #   google-cloud-storage
     #   kubernetes
+    #   msal
     #   multiurl
+    #   ocifs
+    #   panel
     #   requests-oauthlib
     #   sentinelhub
     #   urlpath
 requests-oauthlib==2.0.0
     # via
+    #   google-auth-oauthlib
     #   kubernetes
     #   sentinelhub
 rio-cogeo==5.4.1
@@ -327,8 +568,11 @@ ruamel-yaml==0.18.10
     # via
     #   datacube
     #   deafrica (setup.py)
+    #   eodatasets3
 ruamel-yaml-clib==0.2.12
     # via ruamel-yaml
+s3fs==0.4.2
+    # via fsspec
 s3transfer==0.11.2
     # via boto3
 scikit-image==0.25.1
@@ -336,6 +580,7 @@ scikit-image==0.25.1
 scipy==1.15.1
     # via
     #   dask-image
+    #   eodatasets3
     #   scikit-image
 sentinelhub==3.11.1
     # via deafrica (setup.py)
@@ -344,21 +589,31 @@ setuptools-scm==8.1.0
 shapely==2.0.7
     # via
     #   datacube
+    #   eodatasets3
     #   geopandas
     #   odc-geo
     #   sentinelhub
 six==1.17.0
     # via
+    #   azure-core
+    #   dropbox
     #   kubernetes
     #   python-dateutil
+    #   stone
 slicerator==1.1.0
     # via pims
+smbprotocol==1.15.0
+    # via fsspec
 sortedcontainers==2.4.0
     # via distributed
 sqlalchemy==1.4.54
     # via
     #   datacube
     #   geoalchemy2
+stone==3.3.1
+    # via dropbox
+structlog==25.1.0
+    # via eodatasets3
 tblib==3.0.0
     # via distributed
 tifffile==2025.1.10
@@ -382,24 +637,37 @@ toolz==1.0.0
     #   odc-stac
     #   partd
 tornado==6.4.2
-    # via distributed
+    # via
+    #   bokeh
+    #   distributed
 tqdm==4.67.1
     # via
     #   cdsapi
+    #   fsspec
     #   multiurl
+    #   panel
     #   sentinelhub
 typing-extensions==4.12.2
     # via
+    #   azure-core
+    #   azure-identity
+    #   azure-storage-blob
+    #   cattrs
     #   datapi
+    #   multidict
+    #   panel
     #   pydantic
     #   pydantic-core
     #   referencing
     #   sentinelhub
+    #   structlog
     #   typing-inspect
 typing-inspect==0.9.0
     # via dataclasses-json
 tzdata==2025.1
     # via pandas
+uc-micro-py==1.0.3
+    # via linkify-it-py
 urllib3==2.3.0
     # via
     #   botocore
@@ -410,6 +678,8 @@ urlpath==1.2.0
     # via deafrica (setup.py)
 utm==0.8.0
     # via sentinelhub
+webencodings==0.5.1
+    # via bleach
 websocket-client==1.8.0
     # via kubernetes
 wrapt==1.17.2
@@ -417,9 +687,14 @@ wrapt==1.17.2
 xarray==2025.1.2
     # via
     #   datacube
+    #   eodatasets3
     #   odc-algo
     #   odc-stac
     #   rioxarray
+xyzservices==2025.1.0
+    # via bokeh
+yarl==1.18.3
+    # via aiohttp
 zict==3.0.0
     # via distributed
 zipp==3.21.0
