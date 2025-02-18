@@ -378,10 +378,12 @@ def prepare_wapor_soil_moisture_dataset(
     default="s3://deafrica-data-dev-af/wapor-v3/",
     help="Directory to write the stac files docs to",
 )
+@click.option("--overwrite/--no-overwrite", default=False)
 def cli(
     product_name: str,
-    product_yaml,
-    stac_output_dir,
+    product_yaml: str,
+    stac_output_dir: str,
+    overwrite: bool,
 ):
     valid_product_names = ["wapor_soil_moisture"]
     if product_name not in valid_product_names:
@@ -400,7 +402,6 @@ def cli(
 
     if not is_s3_path(product_yaml):
         if is_url(product_yaml):
-            # TODO: If product yaml file is a github url?
             product_yaml = product_yaml
         else:
             product_yaml = Path(product_yaml).resolve()
@@ -440,6 +441,18 @@ def cli(
                 metadata_output_dir, year, month, f"{tile_id}.odc-metadata.yaml"
             )
         )
+
+        stac_item_destination_url = os.path.join(
+            stac_output_dir, year, month, f"{tile_id}.stac-item.json"
+        )
+
+        if not overwrite:
+            if check_file_exists(stac_item_destination_url):
+                log.info(
+                    f"{stac_item_destination_url} exists! Skipping stac file generation for {dataset_path}"
+                )
+                continue
+
         if product_name == "wapor_soil_moisture":
             dataset_doc = prepare_wapor_soil_moisture_dataset(
                 dataset_path=dataset_path,
@@ -452,9 +465,6 @@ def cli(
         # log.info(f"Wrote dataset to {metadata_output_path}")
 
         # Convert dataset doc to stac item
-        stac_item_destination_url = os.path.join(
-            stac_output_dir, f"{tile_id}.stac-item.json"
-        )
         stac_item = to_stac_item(
             dataset=dataset_doc,
             stac_item_destination_url=str(stac_item_destination_url),
