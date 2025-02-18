@@ -281,10 +281,8 @@ def parse_limit(ctx, param, value):
 @click.option(
     "--limit",
     "-l",
-    help=(
-        "Limit the number of messages to transfer.",
-        "Accepts an integer or a tuple of two integers (e.g., 10 or 5,15).",
-    ),
+    help="Limit the number of messages to transfer."
+    " Accepts an integer or a tuple of two integers (e.g., 10 or 5,15).",
     default=None,
     callback=parse_limit,
 )
