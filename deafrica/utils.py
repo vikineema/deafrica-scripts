@@ -133,7 +133,10 @@ def read_report_missing_scenes(report_path: str, limit=None):
     ]
 
     if limit:
-        missing_scene_paths = missing_scene_paths[: int(limit)]
+        if isinstance(limit, int):
+            missing_scene_paths = missing_scene_paths[:limit]
+        elif isinstance(limit, tuple):
+            missing_scene_paths = missing_scene_paths[limit[0] : limit[-1]]
 
     return missing_scene_paths
 

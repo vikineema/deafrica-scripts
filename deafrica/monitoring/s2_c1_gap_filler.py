@@ -142,7 +142,7 @@ def send_messages(
     queue_name: str,
     max_workers: int = 1,
     product_name: str = "s2_l2a_c1",
-    limit: int = None,
+    limit: int | tuple[int, int] = None,
     slack_url: str = None,
     dryrun: bool = False,
 ) -> None:
@@ -150,7 +150,7 @@ def send_messages(
     Publish a list of missing scenes to an specific queue
 
     params:
-        limit: (int) optional limit of messages to be read from the report
+        limit: (int | tuple[int, int]) optional limit of messages to be read from the report
         max_workers: (int) total number of pods used for the task. This number is used to
             split the number of scenes equally among the PODS
         idx: (int) sequential index which will be used to define the range of scenes that the POD will work with
@@ -178,7 +178,7 @@ def send_messages(
     if "update" in latest_report:
         log.info("FORCED UPDATE FLAGGED!")
 
-    log.info(f"Limited: {int(limit) if limit else 'No limit'}")
+    log.info(f"Limited: {limit if limit else 'No limit'}")
     log.info(f"Number of workers: {max_workers}")
 
     files = read_report_missing_scenes(report_path=latest_report, limit=limit)
@@ -246,6 +246,28 @@ def send_messages(
         sys.exit(1)
 
 
+def parse_limit(ctx, param, value):
+    if value is None:
+        return value
+    try:
+        # Try to convert to integer first
+        return int(value)
+    except ValueError:
+        pass
+
+    try:
+        # Try to convert to a tuple of two integers
+        parts = value.split(",")
+        if len(parts) == 2:
+            return tuple(int(part) for part in parts)
+    except ValueError:
+        pass
+
+    raise click.BadParameter(
+        "Limit must be an integer or a tuple of two integers (e.g., 10 or 5,15)"
+    )
+
+
 @click.command("s2-c1-gap-filler")
 @click.argument("idx", type=int, nargs=1, required=True)
 @click.argument("max_workers", type=int, nargs=1, default=1)
@@ -259,8 +281,12 @@ def send_messages(
 @click.option(
     "--limit",
     "-l",
-    help="Limit the number of messages to transfer.",
+    help=(
+        "Limit the number of messages to transfer.",
+        "Accepts an integer or a tuple of two integers (e.g., 10 or 5,15).",
+    ),
     default=None,
+    callback=parse_limit,
 )
 @slack_url
 @click.option("--version", is_flag=True, default=False)
@@ -270,7 +296,7 @@ def cli(
     max_workers: int = 1,
     sync_queue_name: str = "deafrica-pds-sentinel-2-l2a-c1-sync-scene",
     product_name: str = "s2_l2a_c1",
-    limit: int = None,
+    limit: int | tuple[int, int] = None,
     slack_url: str = None,
     version: bool = False,
     dryrun: bool = False,
@@ -285,7 +311,7 @@ def cli(
             split the number of scenes equally among the PODS
         sync_queue_name: (str) Sync queue name
         product_name (str): Product name being indexed. default is s2_l2a_c1.
-        limit: (str) optional limit of messages to be read from the report
+        limit: int | tuple[int, int] optional limit of messages to be read from the report
         slack_url: (str) Slack notification channel hook URL
         version: (bool) echo the scripts version
         dryrun: (bool) if true do not send messages. used for testing.
@@ -297,15 +323,6 @@ def cli(
     valid_product_name = ["s2_l2a_c1"]
     if product_name not in valid_product_name:
         raise ValueError(f"Product name must be on of {valid_product_name}")
-
-    if limit is not None:
-        try:
-            limit = int(limit)
-        except ValueError:
-            raise ValueError(f"Limit {limit} is not valid")
-
-        if limit < 1:
-            raise ValueError(f"Limit {limit} lower than 1.")
 
     # send the right range of scenes for this worker
     send_messages(
