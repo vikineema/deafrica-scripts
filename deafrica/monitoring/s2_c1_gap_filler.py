@@ -5,17 +5,18 @@ from textwrap import dedent
 from typing import Dict, Optional
 
 import click
-from odc.aws import s3_fetch, s3_client
+from odc.aws import s3_client, s3_fetch
 from odc.aws.queue import get_queue, publish_messages
 
 from deafrica import __version__
 from deafrica.utils import (
     find_latest_report,
+    limit,
     read_report_missing_scenes,
-    split_list_equally,
     send_slack_notification,
     setup_logging,
     slack_url,
+    split_list_equally,
 )
 
 SOURCE_REGION = "us-west-2"
@@ -142,7 +143,7 @@ def send_messages(
     queue_name: str,
     max_workers: int = 1,
     product_name: str = "s2_l2a_c1",
-    limit: int = None,
+    limit: int | tuple[int, int] = None,
     slack_url: str = None,
     dryrun: bool = False,
 ) -> None:
@@ -150,7 +151,7 @@ def send_messages(
     Publish a list of missing scenes to an specific queue
 
     params:
-        limit: (int) optional limit of messages to be read from the report
+        limit: (int | tuple[int, int]) optional limit of messages to be read from the report
         max_workers: (int) total number of pods used for the task. This number is used to
             split the number of scenes equally among the PODS
         idx: (int) sequential index which will be used to define the range of scenes that the POD will work with
@@ -178,7 +179,7 @@ def send_messages(
     if "update" in latest_report:
         log.info("FORCED UPDATE FLAGGED!")
 
-    log.info(f"Limited: {int(limit) if limit else 'No limit'}")
+    log.info(f"Limited: {limit if limit else 'No limit'}")
     log.info(f"Number of workers: {max_workers}")
 
     files = read_report_missing_scenes(report_path=latest_report, limit=limit)
@@ -256,12 +257,7 @@ def send_messages(
     default="deafrica-pds-sentinel-2-l2a-c1-sync-scene",
 )
 @click.argument("product_name", type=str, nargs=1, default="s2_l2a_c1")
-@click.option(
-    "--limit",
-    "-l",
-    help="Limit the number of messages to transfer.",
-    default=None,
-)
+@limit
 @slack_url
 @click.option("--version", is_flag=True, default=False)
 @click.option("--dryrun", is_flag=True, default=False)
@@ -270,7 +266,7 @@ def cli(
     max_workers: int = 1,
     sync_queue_name: str = "deafrica-pds-sentinel-2-l2a-c1-sync-scene",
     product_name: str = "s2_l2a_c1",
-    limit: int = None,
+    limit: int | tuple[int, int] = None,
     slack_url: str = None,
     version: bool = False,
     dryrun: bool = False,
@@ -285,7 +281,7 @@ def cli(
             split the number of scenes equally among the PODS
         sync_queue_name: (str) Sync queue name
         product_name (str): Product name being indexed. default is s2_l2a_c1.
-        limit: (str) optional limit of messages to be read from the report
+        limit: int | tuple[int, int] optional limit of messages to be read from the report
         slack_url: (str) Slack notification channel hook URL
         version: (bool) echo the scripts version
         dryrun: (bool) if true do not send messages. used for testing.
@@ -299,13 +295,9 @@ def cli(
         raise ValueError(f"Product name must be on of {valid_product_name}")
 
     if limit is not None:
-        try:
-            limit = int(limit)
-        except ValueError:
-            raise ValueError(f"Limit {limit} is not valid")
-
-        if limit < 1:
-            raise ValueError(f"Limit {limit} lower than 1.")
+        if isinstance(limit, int):
+            if limit < 1:
+                raise ValueError(f"Limit {limit} lower than 1.")
 
     # send the right range of scenes for this worker
     send_messages(
