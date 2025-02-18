@@ -5,17 +5,18 @@ from textwrap import dedent
 from typing import Dict, Optional
 
 import click
-from odc.aws import s3_fetch, s3_client
+from odc.aws import s3_client, s3_fetch
 from odc.aws.queue import get_queue, publish_messages
 
 from deafrica import __version__
 from deafrica.utils import (
     find_latest_report,
+    limit,
     read_report_missing_scenes,
-    split_list_equally,
     send_slack_notification,
     setup_logging,
     slack_url,
+    split_list_equally,
 )
 
 SOURCE_REGION = "us-west-2"
@@ -246,28 +247,6 @@ def send_messages(
         sys.exit(1)
 
 
-def parse_limit(ctx, param, value):
-    if value is None:
-        return value
-    try:
-        # Try to convert to integer first
-        return int(value)
-    except ValueError:
-        pass
-
-    try:
-        # Try to convert to a tuple of two integers
-        parts = value.split(",")
-        if len(parts) == 2:
-            return tuple(int(part) for part in parts)
-    except ValueError:
-        pass
-
-    raise click.BadParameter(
-        "Limit must be an integer or a tuple of two integers (e.g., 10 or 5,15)"
-    )
-
-
 @click.command("s2-c1-gap-filler")
 @click.argument("idx", type=int, nargs=1, required=True)
 @click.argument("max_workers", type=int, nargs=1, default=1)
@@ -278,14 +257,7 @@ def parse_limit(ctx, param, value):
     default="deafrica-pds-sentinel-2-l2a-c1-sync-scene",
 )
 @click.argument("product_name", type=str, nargs=1, default="s2_l2a_c1")
-@click.option(
-    "--limit",
-    "-l",
-    help="Limit the number of messages to transfer."
-    " Accepts an integer or a tuple of two integers (e.g., 10 or 5,15).",
-    default=None,
-    callback=parse_limit,
-)
+@limit
 @slack_url
 @click.option("--version", is_flag=True, default=False)
 @click.option("--dryrun", is_flag=True, default=False)
@@ -321,6 +293,11 @@ def cli(
     valid_product_name = ["s2_l2a_c1"]
     if product_name not in valid_product_name:
         raise ValueError(f"Product name must be on of {valid_product_name}")
+
+    if limit is not None:
+        if isinstance(limit, int):
+            if limit < 1:
+                raise ValueError(f"Limit {limit} lower than 1.")
 
     # send the right range of scenes for this worker
     send_messages(

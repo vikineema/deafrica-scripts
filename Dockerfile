@@ -29,6 +29,8 @@ RUN apt-get update \
         # Postgres
         postgresql \
         postgresql-client \
+        # For shapely wheel
+        libgeos-dev \
     # Cleanup
     && apt-get autoclean \
     && apt-get autoremove \
@@ -49,14 +51,17 @@ ENV VIRTUAL_ENV="/opt/venv"
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 RUN python3 -m venv $VIRTUAL_ENV 
 
+COPY requirements.txt /tmp/
+RUN python -m pip install --upgrade pip pip-tools \
+     && python -m pip install --no-cache-dir -r /tmp/requirements.txt \
+        --no-binary rasterio \
+        --no-binary shapely \
+        --no-binary fiona
+
 RUN mkdir -p /code
 WORKDIR /code
 COPY . /code/
 
-RUN python -m pip install --upgrade pip pip-tools
-# RUN pip-compile --output-file=requirements.txt --upgrade --verbose
-# Install required python packages
-RUN pip install --no-cache-dir -r requirements.txt 
 RUN pip install /code
 
 CMD ["python", "--version"]

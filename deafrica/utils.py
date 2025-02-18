@@ -133,6 +133,23 @@ def read_report_missing_scenes(report_path: str, limit=None):
     ]
 
     if limit:
+        error_msg = (
+            "Limit must be an integer or a tuple of two integers (e.g., 10 or 5,15)"
+        )
+        # Convert into proper format if not done.
+        if isinstance(limit, str):
+            try:
+                limit = int(limit)
+            except ValueError:
+                try:
+                    parts = limit.split(",")
+                    if len(parts) == 2:
+                        limit = tuple(int(part) for part in parts)
+                    else:
+                        raise ValueError(error_msg)
+                except ValueError:
+                    raise ValueError(error_msg)
+        # Apply limit
         if isinstance(limit, int):
             missing_scene_paths = missing_scene_paths[:limit]
         elif isinstance(limit, tuple):
@@ -254,6 +271,33 @@ def test_http_return(returned):
 
 
 # A whole bunch of generic Click options
+
+
+def parse_limit(ctx, param, value):
+    if value is None:
+        return value
+
+    try:
+        # Try to convert to integer first
+        return int(value)
+    except ValueError:
+        pass
+
+    try:
+        # Try to convert to a tuple of two integers
+        parts = value.split(",")
+        if len(parts) == 2:
+            return tuple(int(part) for part in parts)
+        else:
+            raise ValueError
+    except ValueError:
+        pass
+
+    raise click.BadParameter(
+        "Limit must be an integer or a tuple of two integers (e.g., 10 or 5,15)"
+    )
+
+
 slack_url = click.option(
     "--slack_url",
     help="Slack url to use to send a notification",
@@ -269,8 +313,10 @@ update_stac = click.option(
 limit = click.option(
     "--limit",
     "-l",
-    help="Limit the number of messages to transfer.",
+    help="Limit the number of messages to transfer."
+    " Accepts an integer or a tuple of two integers (e.g., 10 or 5,15).",
     default=None,
+    callback=parse_limit,
 )
 
 
