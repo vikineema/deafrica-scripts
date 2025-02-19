@@ -73,7 +73,7 @@ def get_odc_keys(log) -> set:
                 val.indexed_time
             )
         return all_odc_vals
-    except:
+    except Exception:
         log.info("Error while searching for datasets in odc")
         return {}
 
