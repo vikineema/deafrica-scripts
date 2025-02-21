@@ -7,6 +7,7 @@ import collections
 import json
 import os
 import re
+import sys
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -14,9 +15,11 @@ from pathlib import Path
 import click
 import fsspec
 import gcsfs
+import numpy as np
 import pandas as pd
 import requests
 import s3fs
+import yaml
 from dateutil.relativedelta import relativedelta
 from eodatasets3.images import ValidDataMethod
 from eodatasets3.model import DatasetDoc
@@ -24,7 +27,7 @@ from eodatasets3.serialise import to_path  # noqa F401
 from eodatasets3.stac import to_stac_item
 from fsspec.implementations.local import LocalFileSystem
 from gcsfs import GCSFileSystem
-from odc.aws import s3_dump
+from odc.aws import s3_dump, s3_url_parse
 from s3fs.core import S3FileSystem
 
 from deafrica.easi_assemble import EasiPrepare
@@ -193,7 +196,7 @@ def get_mapset_rasters(wapor_v3_mapset_code: str) -> list[str]:
 
 def get_dekad(year: str | int, month: str | int, dekad_label: str) -> tuple:
     """
-    Get the end date of the dekad that a date belongs to and the time range
+    Get the start date of the dekad that a date belongs to and the time range
     for the dekad.
     Every month has three dekads, such that the first two dekads
     have 10 days (i.e., 1-10, 11-20), and the third is comprised of the
@@ -212,7 +215,7 @@ def get_dekad(year: str | int, month: str | int, dekad_label: str) -> tuple:
     Returns
     -------
     tuple
-        The end date of the dekad and the time range for the dekad.
+        The start date of the dekad and the time range for the dekad.
     """
     if isinstance(year, str):
         year = int(year)
@@ -227,19 +230,105 @@ def get_dekad(year: str | int, month: str | int, dekad_label: str) -> tuple:
         start=first_day, end=last_day, freq="10D", inclusive="left"
     )
     if dekad_label == "D1":
-        input_datetime = (d2_start_date - relativedelta(days=1)).to_pydatetime()
         start_datetime = d1_start_date.to_pydatetime()
-        end_datetime = input_datetime.replace(hour=23, minute=59, second=59)
+        end_datetime = (d2_start_date - relativedelta(days=1)).to_pydatetime()
+        end_datetime = end_datetime.replace(hour=23, minute=59, second=59)
     elif dekad_label == "D2":
-        input_datetime = (d3_start_date - relativedelta(days=1)).to_pydatetime()
         start_datetime = d2_start_date.to_pydatetime()
-        end_datetime = input_datetime.replace(hour=23, minute=59, second=59)
+        end_datetime = (d3_start_date - relativedelta(days=1)).to_pydatetime()
+        end_datetime = end_datetime.replace(hour=23, minute=59, second=59)
     elif dekad_label == "D3":
-        input_datetime = last_day
         start_datetime = d3_start_date.to_pydatetime()
-        end_datetime = input_datetime.replace(hour=23, minute=59, second=59)
+        end_datetime = last_day.replace(hour=23, minute=59, second=59)
 
-    return input_datetime, (start_datetime, end_datetime)
+    return start_datetime, (start_datetime, end_datetime)
+
+
+def get_month(year: str | int, month: str) -> tuple:
+    """
+    Get the start date of the month that a date belongs to and the time range
+    for the month.
+
+    Parameters
+    ----------
+    year: int | str
+        Year
+    month: int | str
+        Month
+
+
+    Returns
+    -------
+    tuple
+        The start date of the month and the time range for the month.
+    """
+    if isinstance(year, str):
+        year = int(year)
+
+    if isinstance(month, str):
+        month = int(month)
+
+    start_datetime = datetime(year, month, 1)
+
+    last_day = datetime(year, month, calendar.monthrange(year, month)[1])
+    end_datetime = last_day.replace(hour=23, minute=59, second=59)
+
+    return start_datetime, (start_datetime, end_datetime)
+
+
+def download_product_yaml(url: str) -> str:
+    """
+    Download a product definition file from a raw github url.
+
+    Parameters
+    ----------
+    url : str
+        URL to the product definition file
+
+    Returns
+    -------
+    str
+        Local file path of the downloaded product definition file
+
+    """
+    try:
+        # Create output directory
+        tmp_products_dir = "/tmp/products"
+        if not check_directory_exists(tmp_products_dir):
+            fs = get_filesystem(tmp_products_dir, anon=False)
+            fs.makedirs(tmp_products_dir, exist_ok=True)
+            log.info(f"Created the directory {tmp_products_dir}")
+
+        output_path = os.path.join(tmp_products_dir, os.path.basename(url))
+
+        # Load product definition from url
+        response = requests.get(url)
+        response.raise_for_status()
+        content = yaml.safe_load(response.content.decode(response.encoding))
+
+        # Write to file.
+        yaml_string = yaml.dump(
+            content,
+            default_flow_style=False,  # Ensures block format
+            sort_keys=False,  # Keeps the original order
+            allow_unicode=True,  # Ensures special characters are correctly represented
+        )
+        # Ensure it starts with "---"
+        yaml_string = f"---\n{yaml_string}"
+
+        with open(output_path, "w") as file:
+            file.write(yaml_string)
+        log.info(f"Product definition file written to {output_path}")
+        return Path(output_path).resolve()
+    except Exception as e:
+        log.error(e)
+        raise e
+
+
+def s3_uri_to_public_url(s3_uri, region="af-south-1"):
+    """Convert S3 URI to a public HTTPS URL"""
+    bucket, key = s3_url_parse(s3_uri)
+    return f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
 
 
 def get_last_modified(file_path: str):
@@ -247,8 +336,12 @@ def get_last_modified(file_path: str):
     of a given URL if available."""
     if is_gcsfs_path(file_path):
         url = file_path.replace("gs://", "https://storage.googleapis.com/")
+    elif is_s3_path(file_path):
+        url = s3_uri_to_public_url(file_path)
     else:
         url = file_path
+
+    assert is_url(url)
     response = requests.head(url, allow_redirects=True)
     last_modified = response.headers.get("Last-Modified")
     if last_modified:
@@ -257,19 +350,11 @@ def get_last_modified(file_path: str):
         return None
 
 
-def prepare_wapor_soil_moisture_dataset(
+def prepare_dataset(
     dataset_path: str | Path,
     product_yaml: str | Path,
     output_path: str = None,
 ) -> DatasetDoc:
-    """
-    Prepare an eo3 metadata file for SAMPLE data product.
-    @param dataset_path: Path to the geotiff to create dataset metadata for.
-    @param product_yaml: Path to the product definition yaml file.
-    @param output_path: Path to write the output metadata file.
-
-    :return: DatasetDoc
-    """
     ## File format of data
     # e.g. cloud-optimised GeoTiff (= GeoTiff)
     file_format = "GeoTIFF"
@@ -294,7 +379,7 @@ def prepare_wapor_soil_moisture_dataset(
     unique_name = f"{tile_id}"
     # Can not have '.' in label
     unique_name_replace = re.sub("\.", "_", unique_name)
-    label = f"{unique_name_replace}-{p.product_name}"
+    label = f"{unique_name_replace}-{p.product_name}"  # noqa F841
     # p.label = label # Optional
     # product_name is added by EasiPrepare().init()
     p.product_uri = f"https://explorer.digitalearth.africa/product/{p.product_name}"
@@ -319,8 +404,16 @@ def prepare_wapor_soil_moisture_dataset(
     ## Scene capture and Processing
 
     # Datetime derived from file name
-    year, month, dekad_label = tile_id.split(".")[-1].split("-")
-    input_datetime, time_range = get_dekad(year, month, dekad_label)
+    try:
+        year, month, dekad_label = tile_id.split(".")[-1].split("-")
+    except ValueError:
+        year, month = tile_id.split(".")[-1].split("-")
+        dekad_label = None
+
+    if dekad_label:
+        input_datetime, time_range = get_dekad(year, month, dekad_label)
+    else:
+        input_datetime, time_range = get_month(year, month)
     # Searchable datetime of the dataset, datetime object
     p.datetime = input_datetime
     # Searchable start and end datetimes of the dataset, datetime objects
@@ -354,9 +447,12 @@ def prepare_wapor_soil_moisture_dataset(
     # This simple loop will go through all the measurements and determine their grids, the valid data polygon, etc
     # and add them to the dataset.
     # For LULC there is only one measurement, land_cover_class
-    p.note_measurement(
-        "relative_soil_moisture", dataset_path, relative_to_metadata=False
-    )
+    if p.product_name == "wapor_soil_moisture":
+        measurement_name = "relative_soil_moisture"
+    elif p.product_name == "wapor_monthly_npp":
+        measurement_name = "net_primary_production"
+
+    p.note_measurement(measurement_name, dataset_path, relative_to_metadata=False)
 
     return p.to_dataset_doc(validate_correctness=True, sort_measurements=True)
 
@@ -379,49 +475,78 @@ def prepare_wapor_soil_moisture_dataset(
     help="Directory to write the stac files docs to",
 )
 @click.option("--overwrite/--no-overwrite", default=False)
+@click.option(
+    "--max-parallel-steps",
+    default=1,
+    type=int,
+    help="Maximum number of parallel steps/pods to have in the workflow.",
+)
+@click.option(
+    "--worker-idx",
+    default=0,
+    type=int,
+    help="Sequential index which will be used to define the range of geotiffs the pod will work with.",
+)
 def cli(
     product_name: str,
     product_yaml: str,
     stac_output_dir: str,
     overwrite: bool,
+    max_parallel_steps: int,
+    worker_idx: int,
 ):
-    valid_product_names = ["wapor_soil_moisture"]
+    valid_product_names = ["wapor_soil_moisture", "wapor_monthly_npp"]
     if product_name not in valid_product_names:
         raise NotImplementedError(
             f"Stac file generation has not been implemented for {product_name}"
         )
 
-    # Set to /tmp as output metadata yaml files are not required.
-    metadata_output_dir = "/tmp"
+    # Set to temporary dir as output metadata yaml files are not required.
+    metadata_output_dir = "tmp/metadata_docs"
     if product_name not in os.path.basename(metadata_output_dir.rstrip("/")):
         metadata_output_dir = os.path.join(metadata_output_dir, product_name)
+
     if is_s3_path(metadata_output_dir):
         raise RuntimeError("Metadata files require to be written to a local directory")
-    else:
-        metadata_output_dir = Path(metadata_output_dir).resolve()
 
+    # Path to product yaml
     if not is_s3_path(product_yaml):
         if is_url(product_yaml):
-            product_yaml = product_yaml
-        else:
-            product_yaml = Path(product_yaml).resolve()
+            product_yaml = download_product_yaml(product_yaml)
     else:
         NotImplemented("Product yaml is expected to be a local file or url not s3 path")
 
-    # Create the proper format for the output directory
+    # Directory to write the stac files to
     if product_name not in os.path.basename(stac_output_dir.rstrip("/")):
         stac_output_dir = os.path.join(stac_output_dir, product_name)
-    if not is_s3_path(stac_output_dir):
-        stac_output_dir = Path(stac_output_dir).resolve()
 
-    log.info(f"Generating stac files for the product {product_name}")
-
+    # WaPOR version 3 mapset code for the product
     if product_name == "wapor_soil_moisture":
         mapset_code = "L2-RSM-D"
+    elif product_name == "wapor_monthly_npp":
+        mapset_code = "L2-NPP-M"
 
-    geotiffs = get_mapset_rasters(mapset_code)
-    # Use a gsutil URI instead of the the public URL
-    geotiffs = [i.replace("https://storage.googleapis.com/", "gs://") for i in geotiffs]
+    all_geotiff_files = get_mapset_rasters(mapset_code)
+    # Use a gsutil URI instead of the public URL
+    all_geotiff_files = [
+        i.replace("https://storage.googleapis.com/", "gs://") for i in all_geotiff_files
+    ]
+
+    # Split files equally among the workers
+    task_chunks = np.array_split(np.array(all_geotiff_files), max_parallel_steps)
+    task_chunks = [chunk.tolist() for chunk in task_chunks]
+    task_chunks = list(filter(None, task_chunks))
+
+    # In case of the index being bigger than the number of positions in the array, the extra POD isn't necessary
+    if len(task_chunks) <= worker_idx:
+        log.warning(f"Worker {worker_idx} Skipped!")
+        sys.exit(0)
+
+    log.info(f"Executing worker {worker_idx}")
+
+    geotiffs = task_chunks[worker_idx]
+
+    log.info(f"Generating stac files for the product {product_name}")
 
     for idx, geotiff in enumerate(geotiffs):
         log.info(f"Generating stac file for {geotiff} {idx+1}/{len(geotiffs)}")
@@ -429,19 +554,22 @@ def cli(
         # File system Path() to the dataset
         # or gsutil URI prefix  (gs://bucket/key) to the dataset.
         if not is_s3_path(geotiff) and not is_gcsfs_path(geotiff):
-            dataset_path = Path(geotiff)
+            dataset_path = Path(geotiff).resolve()
         else:
             dataset_path = geotiff
 
         tile_id = os.path.basename(dataset_path).removesuffix(".tif")
-        year, month, _ = tile_id.split(".")[-1].split("-")
+
+        try:
+            year, month, _ = tile_id.split(".")[-1].split("-")
+        except ValueError:
+            year, month = tile_id.split(".")[-1].split("-")
 
         metadata_output_path = Path(
             os.path.join(
                 metadata_output_dir, year, month, f"{tile_id}.odc-metadata.yaml"
             )
-        )
-
+        ).resolve()
         stac_item_destination_url = os.path.join(
             stac_output_dir, year, month, f"{tile_id}.stac-item.json"
         )
@@ -453,12 +581,24 @@ def cli(
                 )
                 continue
 
-        if product_name == "wapor_soil_moisture":
-            dataset_doc = prepare_wapor_soil_moisture_dataset(
-                dataset_path=dataset_path,
-                product_yaml=product_yaml,
-                output_path=metadata_output_path,
-            )
+        # Create the required parent directories
+        metadata_output_parent_dir = os.path.dirname(metadata_output_path)
+        if not check_directory_exists(metadata_output_parent_dir):
+            fs = get_filesystem(metadata_output_parent_dir, anon=False)
+            fs.makedirs(metadata_output_parent_dir, exist_ok=True)
+            log.info(f"Created the directory {metadata_output_parent_dir}")
+
+        stac_item_parent_dir = os.path.dirname(stac_item_destination_url)
+        if not check_directory_exists(stac_item_parent_dir):
+            fs = get_filesystem(stac_item_parent_dir, anon=False)
+            fs.makedirs(stac_item_parent_dir, exist_ok=True)
+            log.info(f"Created the directory {stac_item_parent_dir}")
+
+        dataset_doc = prepare_dataset(
+            dataset_path=dataset_path,
+            product_yaml=product_yaml,
+            output_path=metadata_output_path,
+        )
 
         # Write the dataset doc to file
         # to_path(metadata_output_path, dataset_doc)
@@ -474,12 +614,13 @@ def cli(
         assets = stac_item["assets"]
         for band in assets.keys():
             band_url = assets[band]["href"]
-            if band_url.startswith("gs://"):
+            if is_gcsfs_path(band_url):
                 new_band_url = band_url.replace(
                     "gs://", "https://storage.googleapis.com/"
                 )
                 stac_item["assets"][band]["href"] = new_band_url
 
+        # Write stac item
         if is_s3_path(stac_item_destination_url):
             s3_dump(
                 data=json.dumps(stac_item, indent=2),
