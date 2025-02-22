@@ -1,6 +1,6 @@
 """
 Download the ESA WorldCereal 10 m 2021 v100 products from Zenodo,
-convert to CLoud Optimized Geotiff, and push to an S3 bucket.
+convert to Cloud Optimized Geotiff, and push to an S3 bucket.
 
 Datasource: https://zenodo.org/records/7875105
 """
@@ -12,14 +12,16 @@ from zipfile import ZipFile
 import click
 import geopandas as gpd
 import requests
-import rioxarray
-from odc.aws import s3_dump
-from odc.geo.xr import assign_crs, write_cog
-from yarl import URL
 
-from deafrica.utils import AFRICA_BBOX, setup_logging
+from deafrica.utils import (
+    AFRICA_EXTENT_URL,
+    check_directory_exists,
+    check_file_exists,
+    crop_geotiff,
+    get_filesystem,
+    setup_logging,
+)
 
-AFRICA_EXTENT_URL = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/africa-extent-bbox.json"
 WORLDCEREAL_AEZ_URL = "https://zenodo.org/records/7875105/files/WorldCereal_AEZ.geojson"
 VALID_YEARS = ["2021"]
 VALID_SEASONS = [
@@ -29,12 +31,40 @@ VALID_SEASONS = [
     "tc-maize-main",
     "tc-maize-second",
 ]
-VALID_PRODUCT_TYPE = ["classification", "confidence"]
-
-DOWNLOAD_DIR = "worldcereal_data"
+VALID_PRODUCTS = [
+    "activecropland",
+    "irrigation",
+    "maize",
+    "springcereals",
+    "temporarycrops",
+    "wintercereals",
+]
+LOCAL_DOWNLOAD_DIR = "tmp/worldcereal_data"
 
 # Set log level to info
 log = setup_logging()
+
+
+def get_africa_aez_ids():
+    """
+    Get the Agro-ecological zone (AEZ) ids for the zones in Africa.
+
+    Returns:
+        set[str]: Agro-ecological zone (AEZ) ids for the zones in Africa
+    """
+    # Get the AEZ ids for Africa
+    africa_extent = gpd.read_file(AFRICA_EXTENT_URL).to_crs("EPSG:4326")
+
+    worldcereal_aez = gpd.read_file(WORLDCEREAL_AEZ_URL).to_crs("EPSG:4326")
+
+    africa_worldcereal_aez_ids = worldcereal_aez.sjoin(
+        africa_extent, predicate="intersects", how="inner"
+    )["aez_id"].to_list()
+
+    africa_worldcereal_aez_ids = [str(i) for i in africa_worldcereal_aez_ids]
+    africa_worldcereal_aez_ids = set(africa_worldcereal_aez_ids)
+
+    return africa_worldcereal_aez_ids
 
 
 def download_and_unzip_data(zip_url: str):
@@ -44,10 +74,13 @@ def download_and_unzip_data(zip_url: str):
     Args:
         zip_url (str): URL for the World Cereal product zip file to download.
     """
-    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+    if not check_directory_exists(LOCAL_DOWNLOAD_DIR):
+        fs = get_filesystem(LOCAL_DOWNLOAD_DIR, anon=False)
+        fs.makedirs(LOCAL_DOWNLOAD_DIR, exist_ok=True)
+        log.info(f"Created the directory {LOCAL_DOWNLOAD_DIR}")
 
     zip_filename = os.path.basename(zip_url).split(".zip")[0] + ".zip"
-    local_zip_path = os.path.join(DOWNLOAD_DIR, zip_filename)
+    local_zip_path = os.path.join(LOCAL_DOWNLOAD_DIR, zip_filename)
 
     # Download the zip file.
     if not os.path.exists(local_zip_path):
@@ -74,7 +107,7 @@ def download_and_unzip_data(zip_url: str):
         # Extract
         local_aez_geotiffs = []
         for file in africa_aez_geotiffs:
-            local_file_path = os.path.join(DOWNLOAD_DIR, file)
+            local_file_path = os.path.join(LOCAL_DOWNLOAD_DIR, file)
 
             # TODO: Remove file path check
             # Check if the file already exists
@@ -83,7 +116,7 @@ def download_and_unzip_data(zip_url: str):
                 continue
 
             # Extract file
-            zip_ref.extract(member=file, path=DOWNLOAD_DIR)
+            zip_ref.extract(member=file, path=LOCAL_DOWNLOAD_DIR)
             local_aez_geotiffs.append(local_file_path)
 
     log.info(f"Download complete! \nDownloaded {len(local_aez_geotiffs)} geotiffs")
@@ -91,93 +124,112 @@ def download_and_unzip_data(zip_url: str):
     return local_aez_geotiffs
 
 
-def get_africa_aez_ids():
+def download_esa_worldcereal_cogs(
+    year: str, season: str, product: str, output_dir: str, overwrite: bool
+):
     """
-    Get the Agro-ecological zone (AEZ) ids for the zones in Africa.
-
-    Returns:
-        set[str]: Agro-ecological zone (AEZ) ids for the zones in Africa
+    Download the ESA WorldCereal 10 m 2021 v100 products from Zenodo,
+    convert to Cloud Optimized Geotiff, and push to an S3 bucket.
     """
-    # Get the AEZ ids for Africa
-    africa_extent = gpd.read_file(AFRICA_EXTENT_URL).to_crs("EPSG:4326")
-
-    worldcereal_aez = gpd.read_file(WORLDCEREAL_AEZ_URL).to_crs("EPSG:4326")
-
-    africa_worldcereal_aez_ids = worldcereal_aez.sjoin(
-        africa_extent, predicate="intersects", how="inner"
-    )["aez_id"].to_list()
-
-    africa_worldcereal_aez_ids = [str(i) for i in africa_worldcereal_aez_ids]
-    africa_worldcereal_aez_ids = set(africa_worldcereal_aez_ids)
-
-    return africa_worldcereal_aez_ids
-
-
-def esa_worldcereal_download_stac_cog(year, season, product, product_type, s3_dst):
-
     if season not in VALID_SEASONS:
         raise ValueError(f"Invalid season selected: {season}")
 
-    if product_type not in VALID_PRODUCT_TYPE:
-        raise ValueError(f"Invalid product type selected: {product_type}")
+    if product not in VALID_PRODUCTS:
+        raise ValueError(f"Invalid product selected: {product}")
 
     if year not in VALID_YEARS:
         raise ValueError(f"Invalid year selected: {year}")
 
-    # URL for the zip file
-    zip_url = f"https://zenodo.org/records/7875105/files/WorldCereal_{year}_{season}_{product}_{product_type}.zip?download=1"
+    # Download the classifcation geotiffs for the product
+    classification_zip_url = f"https://zenodo.org/records/7875105/files/WorldCereal_{year}_{season}_{product}_classification.zip?download=1"
 
-    # Download data
-    local_aez_geotiffs = download_and_unzip_data(zip_url)
+    log.info("Processing classification geotiffs")
 
-    for idx, local_geotiff in enumerate(local_aez_geotiffs):
-        log.info(f"Processing geotiff {idx+1}/{len(local_aez_geotiffs)}")
-        filename = os.path.splitext(os.path.basename(local_geotiff))[0]
-        aez_id, season_, product_, startdate, enddate, product_type_ = filename.split(
+    local_classification_geotiffs = download_and_unzip_data(classification_zip_url)
+    for idx, local_classification_geotiff in enumerate(local_classification_geotiffs):
+        log.info(
+            f"Processing geotiff {local_classification_geotiff} {idx + 1}/{len(local_classification_geotiffs)}"
+        )
+
+        filename = os.path.splitext(os.path.basename(local_classification_geotiff))[0]
+        aez_id, season_, product_, startdate, enddate, product_type = filename.split(
             "_"
         )
 
         # Define output files
-        out_cog = URL(s3_dst) / str(product) / str(season) / str(aez_id) / str(year) / f"{filename}.tif"
-        # out_stac = URL(s3_dst) / str(product) / str(season) / str(aez_id) / str(year) / f"{filename}.stac-item.json"
+        output_cog_path = os.path.join(
+            output_dir, product, season, aez_id, year, f"{filename}.tif"
+        )
+        if not overwrite:
+            if check_file_exists(output_cog_path):
+                log.info(f"{output_cog_path} exists! Skipping ...")
+                continue
 
-        # Create and upload COG
-        da = rioxarray.open_rasterio(local_geotiff).squeeze(dim="band")
-        crs = f"EPSG:{da.rio.crs.to_epsg()}"
-        nodata = da.rio.nodata
-        assert crs == "EPSG:4326"
+        # Create the required parent directories
+        output_cog_parent_dir = os.path.dirname(output_cog_path)
+        if not check_directory_exists(output_cog_parent_dir):
+            fs = get_filesystem(output_cog_parent_dir, anon=False)
+            fs.makedirs(output_cog_parent_dir, exist_ok=True)
+            log.info(f"Created the directory {output_cog_parent_dir}")
 
-        # Subset to Africa
-        ulx, uly, lrx, lry = AFRICA_BBOX
-        # Note: lats are upside down!
-        da = da.sel(y=slice(uly, lry), x=slice(ulx, lrx))
-        # Add crs information
-        da = assign_crs(da, crs=crs)
+        crop_geotiff(local_classification_geotiff, output_cog_path)
 
-        # Create an in memory COG.
-        cog_bytes = write_cog(
-            geo_im=da, fname=":mem:", nodata=nodata, overview_resampling="nearest"
+    # Download the confidence geotiffs for the product
+    confidence_zip_url = f"https://zenodo.org/records/7875105/files/WorldCereal_{year}_{season}_{product}_confidence.zip?download=1"
+
+    log.info("Processing confidence geotiffs")
+
+    local_confidence_geotiffs = download_and_unzip_data(confidence_zip_url)
+    for idx, local_confidence_geotiff in enumerate(local_confidence_geotiffs):
+        log.info(
+            f"Processing geotiff {local_confidence_geotiff} {idx + 1}/{len(local_confidence_geotiffs)}"
         )
 
-        # Upload COG to s3
-        s3_dump(
-            data=cog_bytes,
-            url=str(out_cog),
-            ACL="bucket-owner-full-control",
-            ContentType="image/tiff",
+        filename = os.path.splitext(os.path.basename(local_confidence_geotiff))[0]
+        aez_id, season_, product_, startdate, enddate, product_type = filename.split(
+            "_"
         )
-        log.info(f"COG written to {out_cog}")
 
-        # Create and upload STAC
+        # Define output files
+        output_cog_path = os.path.join(
+            output_dir, product, season, aez_id, year, f"{filename}.tif"
+        )
+        if not overwrite:
+            if check_file_exists(output_cog_path):
+                log.info(f"{output_cog_path} exists! Skipping...")
+                continue
+
+        # Create the required parent directories
+        output_cog_parent_dir = os.path.dirname(output_cog_path)
+        if not check_directory_exists(output_cog_parent_dir):
+            fs = get_filesystem(output_cog_parent_dir, anon=False)
+            fs.makedirs(output_cog_parent_dir, exist_ok=True)
+            log.info(f"Created the directory {output_cog_parent_dir}")
+
+        crop_geotiff(local_confidence_geotiff, output_cog_path)
 
 
 @click.command("download-worldcereal-product")
-@click.option("--year", required=True, default="2021")
-@click.option("--season", required=True)
-@click.option("--product", required=True)
-@click.option("--product-type", required=True, default="classification")
-@click.option("--s3_dst", default="s3://deafrica-data-dev-af/esa_worldcereal_sample/")
-def cli(year, season, product, product_type, s3_dst):
+@click.option(
+    "--year",
+    required=True,
+    default="2021",
+    type=click.Choice(VALID_YEARS, case_sensitive=False),
+)
+@click.option(
+    "--season", required=True, type=click.Choice(VALID_SEASONS, case_sensitive=False)
+)
+@click.option(
+    "--product", required=True, type=click.Choice(VALID_PRODUCTS, case_sensitive=False)
+)
+@click.option(
+    "--output-dir",
+    type=str,
+    default="s3://deafrica-data-dev-af/esa_worldcereal_sample/",
+    help="Directory to write the cropped COG files to",
+)
+@click.option("--overwrite/--no-overwrite", default=False)
+def cli(year, season, product, output_dir, overwrite):
     """
     Available years are
     • 2021
@@ -185,10 +237,10 @@ def cli(year, season, product, product_type, s3_dst):
     Naming convention of the ZIP files is as follows:
         WorldCereal_{year}_{season}_{product}_{classification|confidence}.zip
     """
-    esa_worldcereal_download_stac_cog(
+    download_esa_worldcereal_cogs(
         year=year,
         season=season,
         product=product,
-        product_type=product_type,
-        s3_dst=s3_dst,
+        output_dir=output_dir,
+        overwrite=overwrite,
     )
