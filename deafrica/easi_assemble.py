@@ -22,7 +22,7 @@ from eodatasets3.validate import Level, ValidationExpectations, validate_dataset
 # logger = get_logger('EasiPrepare', level=logging.DEBUG)
 
 # Adapted from
-# ]https://github.com/opendatacube/tutorial-odc-product/blob/master/tasks/eo3assemble/easi_assemble.py
+# https://github.com/opendatacube/tutorial-odc-product/blob/master/tasks/eo3assemble/easi_assemble.py
 
 OUTPUT_NAME = "odc-metadata.yaml"
 

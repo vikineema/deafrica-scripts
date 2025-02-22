@@ -9,120 +9,36 @@ import os
 import re
 import sys
 from datetime import datetime
-from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 import click
-import fsspec
-import gcsfs
 import numpy as np
 import pandas as pd
 import requests
-import s3fs
-import yaml
 from dateutil.relativedelta import relativedelta
 from eodatasets3.images import ValidDataMethod
 from eodatasets3.model import DatasetDoc
 from eodatasets3.serialise import to_path  # noqa F401
 from eodatasets3.stac import to_stac_item
-from fsspec.implementations.local import LocalFileSystem
-from gcsfs import GCSFileSystem
-from odc.aws import s3_dump, s3_url_parse
-from s3fs.core import S3FileSystem
+from odc.aws import s3_dump
 
 from deafrica.easi_assemble import EasiPrepare
 from deafrica.utils import (
+    check_directory_exists,
+    check_file_exists,
+    download_product_yaml,
+    find_geotiff_files,
+    get_filesystem,
+    get_last_modified,
+    is_gcsfs_path,
+    is_s3_path,
+    is_url,
     odc_uuid,
     setup_logging,
 )
 
 # Set log level to info
 log = setup_logging()
-
-
-def is_s3_path(path: str) -> bool:
-    return path.startswith("s3://")
-
-
-def is_gcsfs_path(path: str) -> bool:
-    return path.startswith("gcs://") or path.startswith("gs://")
-
-
-def is_url(path: str) -> bool:
-    return path.startswith("http://") or path.startswith("https://")
-
-
-def get_filesystem(
-    path: str,
-    anon: bool = True,
-) -> S3FileSystem | LocalFileSystem | GCSFileSystem:
-    if is_s3_path(path=path):
-        fs = s3fs.S3FileSystem(
-            anon=anon, s3_additional_kwargs={"ACL": "bucket-owner-full-control"}
-        )
-    elif is_gcsfs_path(path=path):
-        if anon:
-            fs = gcsfs.GCSFileSystem(token="anon")
-        else:
-            fs = gcsfs.GCSFileSystem()
-    else:
-        fs = fsspec.filesystem("file")
-    return fs
-
-
-def check_file_exists(path: str) -> bool:
-    fs = get_filesystem(path=path, anon=True)
-    if fs.exists(path) and fs.isfile(path):
-        return True
-    else:
-        return False
-
-
-def check_directory_exists(path: str) -> bool:
-    fs = get_filesystem(path=path, anon=True)
-    if fs.exists(path) and fs.isdir(path):
-        return True
-    else:
-        return False
-
-
-def check_file_extension(path: str, accepted_file_extensions: list[str]) -> bool:
-    _, file_extension = os.path.splitext(path)
-    if file_extension.lower() in accepted_file_extensions:
-        return True
-    else:
-        return False
-
-
-def is_geotiff(path: str) -> bool:
-    accepted_geotiff_extensions = [".tif", ".tiff", ".gtiff"]
-    return check_file_extension(
-        path=path, accepted_file_extensions=accepted_geotiff_extensions
-    )
-
-
-def find_geotiff_files(directory_path: str, file_name_pattern: str = ".*") -> list[str]:
-    file_name_pattern = re.compile(file_name_pattern)
-
-    fs = get_filesystem(path=directory_path, anon=True)
-
-    geotiff_file_paths = []
-
-    for root, dirs, files in fs.walk(directory_path):
-        for file_name in files:
-            if is_geotiff(path=file_name):
-                if re.search(file_name_pattern, file_name):
-                    geotiff_file_paths.append(os.path.join(root, file_name))
-                else:
-                    continue
-            else:
-                continue
-
-    if is_s3_path(path=directory_path):
-        geotiff_file_paths = [f"s3://{file}" for file in geotiff_file_paths]
-    elif is_gcsfs_path(path=directory_path):
-        geotiff_file_paths = [f"gs://{file}" for file in geotiff_file_paths]
-    return geotiff_file_paths
 
 
 def get_WaPORv3_info(url: str) -> pd.DataFrame:
@@ -274,80 +190,6 @@ def get_month(year: str | int, month: str) -> tuple:
     end_datetime = last_day.replace(hour=23, minute=59, second=59)
 
     return start_datetime, (start_datetime, end_datetime)
-
-
-def download_product_yaml(url: str) -> str:
-    """
-    Download a product definition file from a raw github url.
-
-    Parameters
-    ----------
-    url : str
-        URL to the product definition file
-
-    Returns
-    -------
-    str
-        Local file path of the downloaded product definition file
-
-    """
-    try:
-        # Create output directory
-        tmp_products_dir = "/tmp/products"
-        if not check_directory_exists(tmp_products_dir):
-            fs = get_filesystem(tmp_products_dir, anon=False)
-            fs.makedirs(tmp_products_dir, exist_ok=True)
-            log.info(f"Created the directory {tmp_products_dir}")
-
-        output_path = os.path.join(tmp_products_dir, os.path.basename(url))
-
-        # Load product definition from url
-        response = requests.get(url)
-        response.raise_for_status()
-        content = yaml.safe_load(response.content.decode(response.encoding))
-
-        # Write to file.
-        yaml_string = yaml.dump(
-            content,
-            default_flow_style=False,  # Ensures block format
-            sort_keys=False,  # Keeps the original order
-            allow_unicode=True,  # Ensures special characters are correctly represented
-        )
-        # Ensure it starts with "---"
-        yaml_string = f"---\n{yaml_string}"
-
-        with open(output_path, "w") as file:
-            file.write(yaml_string)
-        log.info(f"Product definition file written to {output_path}")
-        return Path(output_path).resolve()
-    except Exception as e:
-        log.error(e)
-        raise e
-
-
-def s3_uri_to_public_url(s3_uri, region="af-south-1"):
-    """Convert S3 URI to a public HTTPS URL"""
-    bucket, key = s3_url_parse(s3_uri)
-    return f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
-
-
-def get_last_modified(file_path: str):
-    """Returns the Last-Modified timestamp
-    of a given URL if available."""
-    if is_gcsfs_path(file_path):
-        url = file_path.replace("gs://", "https://storage.googleapis.com/")
-    elif is_s3_path(file_path):
-        url = s3_uri_to_public_url(file_path)
-    else:
-        url = file_path
-
-    assert is_url(url)
-    response = requests.head(url, allow_redirects=True)
-    last_modified = response.headers.get("Last-Modified")
-    if last_modified:
-        return parsedate_to_datetime(last_modified)
-    else:
-        return None
 
 
 def prepare_dataset(
