@@ -1,22 +1,21 @@
 import json
-import re
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 from textwrap import dedent
 
 import click
+import datacube
 import pandas as pd
-from odc.aws import s3_dump, s3_client
-from deafrica.utils import list_inventory
+from odc.aws import s3_client, s3_dump
 from urlpath import URL
-from deafrica import __version__
 
+from deafrica import __version__
 from deafrica.utils import (
-    slack_url,
-    update_stac,
+    list_inventory,
     send_slack_notification,
     setup_logging,
+    slack_url,
+    update_stac,
 )
-import datacube
 
 SENTINEL_2_C1_INVENTORY_PATH = URL(
     "s3://deafrica-sentinel-2-l2a-c1-inventory/deafrica-sentinel-2-l2a-c1/deafrica-sentinel-2-l2a-c1-inventory/"
@@ -74,7 +73,7 @@ def get_odc_keys(log) -> set:
                 val.indexed_time
             )
         return all_odc_vals
-    except:
+    except Exception:
         log.info("Error while searching for datasets in odc")
         return {}
 
@@ -127,7 +126,7 @@ def generate_buckets_diff(
             )
         )
 
-        log.info(f"Retrieving keys from odc")
+        log.info("Retrieving keys from odc")
         all_odc_values = get_odc_keys(log)
         indexed_keys = all_odc_values.keys()
 
