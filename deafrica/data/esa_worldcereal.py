@@ -108,13 +108,6 @@ def download_and_unzip_data(zip_url: str):
         local_aez_geotiffs = []
         for file in africa_aez_geotiffs:
             local_file_path = os.path.join(LOCAL_DOWNLOAD_DIR, file)
-
-            # TODO: Remove file path check
-            # Check if the file already exists
-            if os.path.exists(local_file_path):
-                local_aez_geotiffs.append(local_file_path)
-                continue
-
             # Extract file
             zip_ref.extract(member=file, path=LOCAL_DOWNLOAD_DIR)
             local_aez_geotiffs.append(local_file_path)
@@ -196,7 +189,7 @@ def download_esa_worldcereal_cogs(
         )
         if not overwrite:
             if check_file_exists(output_cog_path):
-                log.info(f"{output_cog_path} exists! Skipping...")
+                log.info(f"{output_cog_path} exists! Skipping ...")
                 continue
 
         # Create the required parent directories
@@ -209,7 +202,7 @@ def download_esa_worldcereal_cogs(
         crop_geotiff(local_confidence_geotiff, output_cog_path)
 
 
-@click.command("download-worldcereal-product")
+@click.command("download-esa-worldcereal")
 @click.option(
     "--year",
     required=True,
