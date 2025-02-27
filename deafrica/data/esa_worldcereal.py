@@ -465,7 +465,7 @@ def create_esa_worldcereal_stac(
 ):
     """
     Create stac files for products from the ESA WorldCereal 10 m 2021 v100.
-    
+
     The actual AEZ-based GeoTIFF files are named according to following
     convention:
         {AEZ_id}_{season}_{product}_{startdate}_{enddate}_{classification|confidence}.tif
