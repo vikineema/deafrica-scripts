@@ -21,16 +21,13 @@ from uuid import UUID, uuid5
 import click
 import fsspec
 import gcsfs
-import geopandas as gpd
 import pyarrow.parquet as pq
 import requests
-import rioxarray
 import s3fs
 import yaml
 from fsspec.implementations.local import LocalFileSystem
 from gcsfs import GCSFileSystem
 from odc.aws import s3_client, s3_fetch, s3_ls_dir, s3_url_parse
-from odc.geo.xr import assign_crs, write_cog
 from s3fs.core import S3FileSystem
 from xarray.tutorial import file_formats
 
@@ -490,15 +487,27 @@ def list_inventory(
 
 
 def is_s3_path(path: str) -> bool:
-    return path.startswith("s3://")
+    o = urlparse(path)
+    if o.scheme in ["s3"]:
+        return True
+    else:
+        return False
 
 
 def is_gcsfs_path(path: str) -> bool:
-    return path.startswith("gcs://") or path.startswith("gs://")
+    o = urlparse(path)
+    if o.scheme in ["gcs", "gs"]:
+        return True
+    else:
+        return False
 
 
 def is_url(path: str) -> bool:
-    return path.startswith("http://") or path.startswith("https://")
+    o = urlparse(path)
+    if o.scheme in ["http", "https"]:
+        return True
+    else:
+        return False
 
 
 def get_filesystem(
@@ -646,38 +655,3 @@ def get_last_modified(file_path: str):
         return parsedate_to_datetime(last_modified)
     else:
         return None
-
-
-def crop_geotiff(img_path: str, output_path: str):
-    """
-    Crop a geotiff file to the extent of Africa
-
-    Parameters
-    ----------
-    img_path : str
-         Path to geotiff to crop
-    output_path : str
-        Output file path
-    """
-    da = rioxarray.open_rasterio(img_path).squeeze(dim="band")
-    crs = da.rio.crs
-    nodata = da.rio.nodata
-
-    da = assign_crs(da, crs)
-
-    # Subset to Africa
-    africa_extent = gpd.read_file(AFRICA_EXTENT_URL).to_crs(crs)
-    minx, miny, maxx, maxy = africa_extent.total_bounds
-    # Note: lats are upside down!
-    da = da.sel(y=slice(maxy, miny), x=slice(minx, maxx))
-
-    # Create an in memory COG.
-    cog_bytes = write_cog(
-        geo_im=da, fname=":mem:", nodata=nodata, overview_resampling="nearest"
-    )
-
-    # Write to file
-    fs = get_filesystem(output_path, anon=False)
-    with fs.open(output_path, "wb") as file:
-        file.write(cog_bytes)
-    logging.info(f"Cropped geotiff written to {output_path}")
