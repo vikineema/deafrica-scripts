@@ -28,6 +28,7 @@ from deafrica.utils import (
     check_file_exists,
     download_product_yaml,
     find_geotiff_files,
+    fix_stac_item,
     get_filesystem,
     get_last_modified,
     is_gcsfs_path,
@@ -453,14 +454,7 @@ def cli(
         )
 
         # Fix links in stac item
-        assets = stac_item["assets"]
-        for band in assets.keys():
-            band_url = assets[band]["href"]
-            if is_gcsfs_path(band_url):
-                new_band_url = band_url.replace(
-                    "gs://", "https://storage.googleapis.com/"
-                )
-                stac_item["assets"][band]["href"] = new_band_url
+        stac_item = fix_stac_item(stac_item)
 
         # Write stac item
         if is_s3_path(stac_item_destination_url):

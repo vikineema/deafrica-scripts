@@ -600,7 +600,7 @@ def create_esa_worldcereal_stac(
             stac_item_destination_url=str(stac_item_destination_url),
         )
 
-        # Skip fixing links n stac item for now
+        # Fix links in stac item for now
         stac_item = fix_stac_item(stac_item)
 
         # Write stac item
