@@ -28,6 +28,7 @@ import yaml
 from fsspec.implementations.local import LocalFileSystem
 from gcsfs import GCSFileSystem
 from odc.aws import s3_client, s3_fetch, s3_ls_dir, s3_url_parse
+from pyproj import CRS
 from s3fs.core import S3FileSystem
 from xarray.tutorial import file_formats
 
@@ -655,3 +656,75 @@ def get_last_modified(file_path: str):
         return parsedate_to_datetime(last_modified)
     else:
         return None
+
+
+def crs_str_to_int(crs_string: str) -> int:
+    crs = CRS(crs_string)
+    crs_int = int(crs.to_authority()[1])
+    return crs_int  # Output: 4326
+
+
+def fix_stac_item(stac_file: dict) -> dict:
+    """
+    Implement a few fixes to get the stac item from
+    the metadatadoc to be odc compliant
+
+    Parameters
+    ----------
+    stac_file : dict
+        Stac item from converting a dataset doc to stac using
+        `eodatasets3.stac.to_stac_item`
+
+    Returns
+    -------
+    dict
+        Updated stac_item
+    """
+    # Fix proj:code property in properties
+    properties = stac_file["properties"]
+    proj_code = properties.get("proj:code")
+
+    if proj_code:
+        new_properties = {}
+        for k, v in properties.items():
+            if k == "proj:code":
+                new_properties["proj:epsg"] = crs_str_to_int(proj_code)
+            else:
+                new_properties[k] = v
+    else:
+        new_properties = None
+
+    # Update properties
+    if new_properties:
+        stac_file["properties"] = new_properties
+
+    # Fix links in assets
+    assets = stac_file["assets"]
+    for measurement in assets.keys():
+        measurement_url = assets[measurement]["href"]
+        if is_gcsfs_path(measurement_url):
+            new_measurement_url = measurement_url.replace(
+                "gs://", "https://storage.googleapis.com/"
+            )
+            stac_file["assets"][measurement]["href"] = new_measurement_url
+
+    # Fix proj:code property in assets
+    assets = stac_file["assets"]
+    for measurement in assets.keys():
+        measurement_properties = assets[measurement]
+        proj_code = measurement_properties.get("proj:code")
+        if proj_code:
+            new_measurement_properties = {}
+            for k, v in measurement_properties.items():
+                if k == "proj:code":
+                    new_measurement_properties["proj:epsg"] = crs_str_to_int(proj_code)
+                else:
+                    new_measurement_properties[k] = v
+        else:
+            new_measurement_properties = None
+
+        # Update properties
+        if new_measurement_properties:
+            stac_file["assets"][measurement] = new_measurement_properties
+
+    return stac_file
