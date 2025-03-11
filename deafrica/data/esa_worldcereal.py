@@ -290,7 +290,7 @@ def prepare_dataset(
     ## Scene metrics, as available
 
     # The "region" of acquisition, if applicable
-    p.region_code = attrs["AEZ_ID"]
+    p.region_code = str(attrs["AEZ_ID"])
     # p.properties["eo:gsd"] = 'FILL'  # Nominal ground sample distance or spatial resolution
     # p.properties["eo:cloud_cover"] = 'OPTIONAL'
     # p.properties["eo:sun_azimuth"] = 'OPTIONAL'
