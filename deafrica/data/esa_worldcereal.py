@@ -33,7 +33,6 @@ from deafrica.utils import (
     check_file_exists,
     download_product_yaml,
     find_geotiff_files,
-    fix_stac_item,
     get_filesystem,
     is_gcsfs_path,
     is_s3_path,
@@ -599,9 +598,6 @@ def create_esa_worldcereal_stac(
             dataset=dataset_doc,
             stac_item_destination_url=str(stac_item_destination_url),
         )
-
-        # Fix links in stac item for now
-        stac_item = fix_stac_item(stac_item)
 
         # Write stac item
         if is_s3_path(stac_item_destination_url):
