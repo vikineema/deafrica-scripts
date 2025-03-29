@@ -5,3 +5,5 @@ extend-ignore =
     E203,E701,
     # Comments
     E266
+    # Line length
+    E501
