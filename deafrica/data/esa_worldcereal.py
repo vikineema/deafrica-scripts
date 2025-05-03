@@ -24,21 +24,21 @@ from eodatasets3.images import ValidDataMethod
 from eodatasets3.model import DatasetDoc
 from eodatasets3.serialise import to_path  # noqa F401
 from eodatasets3.stac import to_stac_item
+from odc.apps.dc_tools._docs import odc_uuid
 from odc.aws import s3_dump
 
-from deafrica.easi_assemble import EasiPrepare
-from deafrica.logs import setup_logging
-from deafrica.utils import (
-    AFRICA_EXTENT_URL,
+from deafrica.data.easi_assemble import EasiPrepare
+from deafrica.io import (
     check_directory_exists,
     check_file_exists,
-    download_product_yaml,
     find_geotiff_files,
     get_filesystem,
     is_gcsfs_path,
     is_s3_path,
-    is_url,
-    odc_uuid,
+)
+from deafrica.logs import setup_logging
+from deafrica.utils import (
+    AFRICA_EXTENT_URL,
 )
 
 WORLDCEREAL_AEZ_URL = "https://zenodo.org/records/7875105/files/WorldCereal_AEZ.geojson"
@@ -487,11 +487,10 @@ def create_esa_worldcereal_stac(
         raise RuntimeError("Metadata files require to be written to a local directory")
 
     # Path to product yaml
-    if not is_s3_path(product_yaml):
-        if is_url(product_yaml):
-            product_yaml = download_product_yaml(product_yaml)
-    else:
-        NotImplemented("Product yaml is expected to be a local file or url not s3 path")
+    if is_s3_path(product_yaml):
+        raise NotImplementedError(
+            "Product yaml is expected to be a local file or url not s3 path"
+        )
 
     # Geotiffs directory
     if geotiffs_dir:
