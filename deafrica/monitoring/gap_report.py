@@ -38,11 +38,12 @@ def read_report_missing_scenes(report_path: str, limit=None):
     report_json = s3_fetch(url=report_path, s3=s3)
     report_dict = json.loads(report_json)
 
-    if report_dict.get("missin1g", None) is None:
+    key = "missing"
+    if report_dict.get(key, None) is None:
         raise Exception("Missing scenes not found")
 
     missing_scene_paths = [
-        scene_path.strip() for scene_path in report_dict["missing"] if scene_path
+        scene_path.strip() for scene_path in report_dict[key] if scene_path
     ]
 
     if limit:
