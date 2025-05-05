@@ -20,11 +20,11 @@ import click
 import datacube
 import pandas as pd
 from odc.aws import s3_client, s3_dump
-from urlpath import URL
 
 from deafrica import __version__
 from deafrica.click_options import slack_url, update_stac
 from deafrica.inventory import list_inventory
+from deafrica.io import join_url
 from deafrica.logs import setup_logging
 from deafrica.utils import (
     convert_str_to_date,
@@ -40,19 +40,18 @@ FILES = {
     "ls5": "LANDSAT_TM_C2_L2.csv.gz",
 }
 
-BASE_BULK_CSV_URL = URL(
+BASE_BULK_CSV_URL = (
     "https://landsat.usgs.gov/landsat/metadata_service/bulk_metadata_files/"
 )
 
-AFRICA_GZ_PATHROWS_URL = URL(
-    "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/deafrica-usgs-pathrows.csv.gz"
-)
+AFRICA_GZ_PATHROWS_URL = "https://raw.githubusercontent.com/digitalearthafrica/deafrica-extent/master/deafrica-usgs-pathrows.csv.gz"
 
-LANDSAT_INVENTORY_PATH = URL(
+
+LANDSAT_INVENTORY_PATH = (
     "s3://deafrica-landsat-inventory/deafrica-landsat/deafrica-landsat-inventory/"
 )
 
-USGS_S3_BUCKET_PATH = URL("s3://usgs-landsat")
+USGS_S3_BUCKET_PATH = "s3://usgs-landsat"
 
 
 def get_and_filter_keys_from_files(file_path: Path):
@@ -133,7 +132,7 @@ def get_and_filter_keys(satellites: tuple[str, str]) -> set:
         raise ValueError(f"Invalid satellites: {satellites}")
 
     list_json_keys = list_inventory(
-        manifest=str(LANDSAT_INVENTORY_PATH),
+        manifest=LANDSAT_INVENTORY_PATH,
         prefix="collection02",
         suffix="_stac.json",
         multiple_contains=sat_prefixes,
@@ -155,7 +154,7 @@ def get_odc_keys(satellites: tuple[str, str], log) -> set:
                     + "/"
                 ] = uri.indexed_time
         return all_odc_vals
-    except:
+    except Exception:
         log.info("Error while searching for datasets in odc")
         return {}
 
@@ -178,10 +177,11 @@ def generate_buckets_diff(
 
     log.info("Task started")
 
-    landsat_status_report_path = URL(f"s3://{bucket_name}/status-report/")
-    landsat_status_report_url = URL(
-        f"https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/"
+    landsat_status_report_path = f"s3://{bucket_name}/status-report/"
+    landsat_status_report_url = (
+        "https://{bucket_name}.s3.af-south-1.amazonaws.com/status-report/"
     )
+
     environment = "DEV" if "dev" in bucket_name else "PDS"
 
     title = " & ".join(satellites).replace("ls", "Landsat ")
@@ -203,7 +203,7 @@ def generate_buckets_diff(
 
     # Download bulk file
     log.info("Download Bulk file")
-    file_path = download_file_to_tmp(url=str(BASE_BULK_CSV_URL), file_name=file_name)
+    file_path = download_file_to_tmp(url=BASE_BULK_CSV_URL, file_name=file_name)
 
     # Retrieve keys from the bulk file
     log.info("Filtering keys from bulk file")
@@ -224,7 +224,7 @@ def generate_buckets_diff(
         # missing scenes = keys that are in the bulk file but missing in PDS sync bucket and/or in source bucket
         log.info("Filtering missing scenes")
         missing_scenes = [
-            str(USGS_S3_BUCKET_PATH / path)
+            join_url(USGS_S3_BUCKET_PATH, path)
             for path in source_paths.difference(dest_paths)
         ]
 
@@ -232,23 +232,23 @@ def generate_buckets_diff(
         # orphan scenes = keys that are in PDS sync bucket but missing in the bulk file and/or in source bucket
         log.info("Filtering orphan scenes")
         orphaned_scenes = [
-            str(URL(f"s3://{bucket_name}") / path)
+            join_url(f"s3://{bucket_name}", path)
             for path in dest_paths.difference(source_paths)
         ]
 
-        log.info(f"Retrieving keys from odc")
+        log.info("Retrieving keys from odc")
         all_odc_values = get_odc_keys(satellites, log)
         all_odc_keys = all_odc_values.keys()
 
         missing_odc_scenes = [
-            str(URL(f"s3://{bucket_name}") / path)
+            join_url(f"s3://{bucket_name}", path)
             for path in dest_paths.difference(all_odc_keys)
         ]
 
         yesterday = date.today() - timedelta(days=1)
 
         orphaned_odc_scenes = [
-            str(URL(f"s3://{bucket_name}") / path)
+            join_url(f"s3://{bucket_name}", path)
             for path in set(all_odc_keys).difference(dest_paths)
             if yesterday > all_odc_values[path].date()
         ]
@@ -274,14 +274,14 @@ def generate_buckets_diff(
             (
                 f"{title}_{date_string}_gap_report.json"
                 if not update_stac
-                else URL(f"{date_string}_gap_report_update.json")
+                else f"{date_string}_gap_report_update.json"
             )
             .replace(" ", "_")
             .replace("_&", "")
         )
 
         log.info(
-            f"Report file will be saved in {landsat_status_report_path / output_filename}"
+            f"Report file will be saved in {join_url(landsat_status_report_path, output_filename)}"
         )
         missing_orphan_scenes_json = json.dumps(
             {
@@ -294,13 +294,13 @@ def generate_buckets_diff(
 
         s3_dump(
             data=missing_orphan_scenes_json,
-            url=str(landsat_status_report_path / output_filename),
+            url=join_url(landsat_status_report_path, output_filename),
             s3=landsat_s3,
             ContentType="application/json",
         )
 
     report_output = (
-        str(landsat_status_report_url / output_filename)
+        join_url(landsat_status_report_url, output_filename)
         if len(missing_scenes) > 0
         or len(orphaned_scenes) > 0
         or len(missing_odc_scenes) > 0

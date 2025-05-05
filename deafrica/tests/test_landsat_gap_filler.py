@@ -5,8 +5,8 @@ import boto3
 import pytest
 from moto import mock_s3, mock_sqs
 from odc.aws.queue import get_queue
-from urlpath import URL
 
+from deafrica.io import join_url
 from deafrica.monitoring import landsat_gap_filler
 from deafrica.monitoring.landsat_gap_filler import (
     build_messages,
@@ -24,7 +24,7 @@ from deafrica.tests.conftest import (
 DATA_FOLDER = "landsat"
 FAKE_LANDSAT_GAP_REPORT = "landsat_5_2021-08-16_gap_report_update.json"
 LANDSAT_GAP_REPORT = TEST_DATA_DIR / DATA_FOLDER / FAKE_LANDSAT_GAP_REPORT
-S3_LANDSAT_GAP_REPORT = URL(REPORT_FOLDER) / FAKE_LANDSAT_GAP_REPORT
+S3_LANDSAT_GAP_REPORT = join_url(REPORT_FOLDER, FAKE_LANDSAT_GAP_REPORT)
 
 
 def test_build_messages():
@@ -60,7 +60,7 @@ def test_post_messages():
 
 @mock_sqs
 @mock_s3
-def test_generate_buckets_diff(s3_report_path: URL):
+def test_generate_buckets_diff(s3_report_path: str):
     sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
 
@@ -90,7 +90,7 @@ def test_generate_buckets_diff(s3_report_path: URL):
 
 @mock_sqs
 @mock_s3
-def test_exceptions(s3_report_path: URL):
+def test_exceptions(s3_report_path: str):
     sqs_client = boto3.client("sqs", region_name=REGION)
     sqs_client.create_queue(QueueName=SQS_QUEUE_NAME)
 
