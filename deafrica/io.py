@@ -56,7 +56,8 @@ def get_filesystem(
     if is_s3_path(path=path):
         fs = S3FileSystem(
             anon=anon,
-            profile="default",
+            # Use profile only on sandbox
+            # profile="default",
             s3_additional_kwargs={"ACL": "bucket-owner-full-control"},
         )
     elif is_gcsfs_path(path=path):
