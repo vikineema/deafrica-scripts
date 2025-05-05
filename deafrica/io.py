@@ -41,7 +41,7 @@ def is_local_path(path: str) -> bool:
     return isinstance(fs, LocalFileSystem)
 
 
-def join_urlpath(base, *paths) -> str:
+def join_url(base, *paths) -> str:
     if is_local_path(base):
         return os.path.join(base, *paths)
     else:
@@ -241,7 +241,7 @@ def gsutil_uri_to_public_url(uri: str) -> str:
     else:
         bucket = loc.hostname
         key = re.sub("^[/]", "", loc.path)
-        public_url = join_urlpath("https://storage.googleapis.com/", bucket, key)
+        public_url = join_url("https://storage.googleapis.com/", bucket, key)
         return public_url
 
 

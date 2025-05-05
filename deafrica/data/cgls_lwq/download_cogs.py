@@ -35,7 +35,7 @@ from deafrica.io import (
     download_file_from_url,
     get_filesystem,
     is_local_path,
-    join_urlpath,
+    join_url,
 )
 from deafrica.logs import setup_logging
 
@@ -80,7 +80,7 @@ def get_output_cog_url(
     if tile_index:
         tile_index_str = get_tile_index_str(tile_index)
         tile_index_str_x, tile_index_str_y = get_tile_index_str_tuple(tile_index_str)
-        parent_dir = join_urlpath(
+        parent_dir = join_url(
             output_dir,
             tile_index_str_x,
             tile_index_str_y,
@@ -90,14 +90,14 @@ def get_output_cog_url(
         )
         file_name = f"{filename_prefix}_{acronym}_{date_str}_{area}_{sensor}_{version}_{tile_index_str}_{subdataset_variable}.tif"
     else:
-        parent_dir = join_urlpath(output_dir, year, month, day)
+        parent_dir = join_url(output_dir, year, month, day)
         file_name = f"{filename_prefix}_{acronym}_{date_str}_{area}_{sensor}_{version}_{subdataset_variable}.tif"
 
     if not check_directory_exists(parent_dir):
         fs = get_filesystem(parent_dir, anon=False)
         fs.makedirs(parent_dir, exist_ok=True)
 
-    output_cog_url = join_urlpath(parent_dir, file_name)
+    output_cog_url = join_url(parent_dir, file_name)
     return output_cog_url
 
 
@@ -201,7 +201,7 @@ def download_cogs(
     failed_to_download = []
 
     for netcdf_url in netcdf_urls:
-        output_netcdf_file_path = join_urlpath(tmp_dir, posixpath.basename(netcdf_url))
+        output_netcdf_file_path = join_url(tmp_dir, posixpath.basename(netcdf_url))
 
         if check_file_exists(output_netcdf_file_path):
             netcdf_file_paths.append(output_netcdf_file_path)
@@ -330,7 +330,7 @@ def download_cogs(
         failed_tasks_json_array = json.dumps(failed_tasks)
 
         tasks_directory = "/tmp/"
-        failed_tasks_output_file = join_urlpath(tasks_directory, "failed_tasks")
+        failed_tasks_output_file = join_url(tasks_directory, "failed_tasks")
 
         fs = get_filesystem(path=tasks_directory, anon=False)
 

@@ -25,7 +25,7 @@ from deafrica.io import (
     find_geotiff_files,
     get_filesystem,
     is_local_path,
-    join_urlpath,
+    join_url,
 )
 from deafrica.logs import setup_logging
 
@@ -56,7 +56,7 @@ def get_stac_item_destination_url(output_dir: str, dataset_tile_id: str) -> str:
     file_name = f"{dataset_tile_id}.stac-item.json"
     tile_index_str_x, tile_index_str_y = get_tile_index_str_tuple(tile_index_str)
 
-    parent_dir = join_urlpath(
+    parent_dir = join_url(
         output_dir,
         tile_index_str_x,
         tile_index_str_y,
@@ -69,7 +69,7 @@ def get_stac_item_destination_url(output_dir: str, dataset_tile_id: str) -> str:
         fs = get_filesystem(parent_dir, anon=False)
         fs.makedirs(parent_dir, exist_ok=True)
 
-    stac_item_destination_url = join_urlpath(parent_dir, file_name)
+    stac_item_destination_url = join_url(parent_dir, file_name)
     return stac_item_destination_url
 
 
@@ -102,7 +102,7 @@ def get_eo3_dataset_doc_file_path(
     file_name = f"{dataset_tile_id}.odc-metadata.yaml"
     tile_index_str_x, tile_index_str_y = get_tile_index_str_tuple(tile_index_str)
 
-    parent_dir = join_urlpath(
+    parent_dir = join_url(
         output_dir,
         tile_index_str_x,
         tile_index_str_y,
@@ -116,7 +116,7 @@ def get_eo3_dataset_doc_file_path(
             fs = get_filesystem(parent_dir, anon=False)
             fs.makedirs(parent_dir, exist_ok=True)
 
-    eo3_dataset_doc_file_path = join_urlpath(parent_dir, file_name)
+    eo3_dataset_doc_file_path = join_url(parent_dir, file_name)
     return eo3_dataset_doc_file_path
 
 
@@ -260,7 +260,7 @@ def create_stac_files(
         failed_tasks_json_array = json.dumps(failed_tasks)
 
         tasks_directory = "/tmp/"
-        failed_tasks_output_file = join_urlpath(tasks_directory, "failed_tasks")
+        failed_tasks_output_file = join_url(tasks_directory, "failed_tasks")
 
         fs = get_filesystem(path=tasks_directory, anon=False)
 
