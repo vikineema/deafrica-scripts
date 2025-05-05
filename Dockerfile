@@ -1,4 +1,5 @@
-FROM ghcr.io/osgeo/gdal:ubuntu-small-3.8.5 AS base
+# gdal:ubuntu-small no longer comes with netcdf support compiled into gdal
+FROM ghcr.io/osgeo/gdal:ubuntu-full-3.8.5 AS base
 
 ENV CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt\
     DEBIAN_FRONTEND=noninteractive \

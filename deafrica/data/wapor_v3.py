@@ -20,23 +20,20 @@ from eodatasets3.images import ValidDataMethod
 from eodatasets3.model import DatasetDoc
 from eodatasets3.serialise import to_path  # noqa F401
 from eodatasets3.stac import to_stac_item
+from odc.apps.dc_tools._docs import odc_uuid
 from odc.aws import s3_dump
 
-from deafrica.easi_assemble import EasiPrepare
-from deafrica.utils import (
+from deafrica.data.easi_assemble import EasiPrepare
+from deafrica.io import (
     check_directory_exists,
     check_file_exists,
-    download_product_yaml,
     find_geotiff_files,
-    fix_assets_links,
     get_filesystem,
     get_last_modified,
     is_gcsfs_path,
     is_s3_path,
-    is_url,
-    odc_uuid,
-    setup_logging,
 )
+from deafrica.logs import setup_logging
 
 # Set log level to info
 log = setup_logging()
@@ -353,11 +350,10 @@ def create_wapor_v3_stac(
         raise RuntimeError("Metadata files require to be written to a local directory")
 
     # Path to product yaml
-    if not is_s3_path(product_yaml):
-        if is_url(product_yaml):
-            product_yaml = download_product_yaml(product_yaml)
-    else:
-        NotImplemented("Product yaml is expected to be a local file or url not s3 path")
+    if is_s3_path(product_yaml):
+        raise NotImplementedError(
+            "Product yaml is expected to be a local file or url not s3 path"
+        )
 
     # Directory to write the stac files to
     if product_name not in os.path.basename(stac_output_dir.rstrip("/")):
@@ -452,9 +448,6 @@ def create_wapor_v3_stac(
             dataset=dataset_doc,
             stac_item_destination_url=str(stac_item_destination_url),
         )
-
-        # Fix links in stac item
-        stac_item = fix_assets_links(stac_item)
 
         # Write stac item
         if is_s3_path(stac_item_destination_url):
