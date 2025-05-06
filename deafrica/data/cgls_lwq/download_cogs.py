@@ -5,6 +5,7 @@ crop and convert to Cloud Optimized Geotiffs, and push to an S3 bucket.
 
 import json
 import logging
+import os
 import posixpath
 import sys
 import warnings
@@ -193,137 +194,135 @@ def download_cogs(
 
     netcdf_urls = task_chunks[worker_idx]
 
-    # Download netcdf files to disk
-    log.info("Downloading netcdf files to disk")
-    tmp_dir = f"/tmp/{product_name}/netcdfs/"
-
-    netcdf_file_paths = []
-    failed_to_download = []
-
-    for netcdf_url in netcdf_urls:
-        output_netcdf_file_path = join_url(tmp_dir, posixpath.basename(netcdf_url))
-
-        if check_file_exists(output_netcdf_file_path):
-            netcdf_file_paths.append(output_netcdf_file_path)
-            continue
-        else:
-            try:
-                output_netcdf_file_path = download_file_from_url(
-                    url=netcdf_url, output_file_path=output_netcdf_file_path, chunks=100
-                )
-                log.info(f"Downloaded {netcdf_url} to {output_netcdf_file_path}")
-            except Exception as error:
-                log.exception(error)
-                log.error(f"Failed to download netcdf {netcdf_url}")
-                failed_to_download.append(netcdf_url)
-
-        if check_file_exists(output_netcdf_file_path):
-            netcdf_file_paths.append(output_netcdf_file_path)
-        else:
-            failed_to_download.append(netcdf_url)
-    log.info("Download complete")
-
-    log.info(f"Generating COG files for the product {product_name}")
     # Define the tiles over Africa
-    # Select resolution for tile
     if "300m" in netcdf_urls[0]:
         grid_res = 300
     elif "100m" in netcdf_urls[0]:
         grid_res = 100
 
     tiles = get_africa_tiles(grid_res)
+
+    tmp_dir = f"/tmp/{product_name}/netcdfs/"
+    failed_to_download = []
     failed_to_tile = []
-    for idx, local_netcdf_file in enumerate(netcdf_file_paths):
-        try:
+    for netcdf_url in netcdf_urls:
+        # Download file
+        output_netcdf_file_path = join_url(tmp_dir, posixpath.basename(netcdf_url))
+        log.info(f"Downloading {netcdf_url} to {output_netcdf_file_path}")
+
+        if check_file_exists(output_netcdf_file_path):
             log.info(
-                f"Generating cog files for {local_netcdf_file} {idx + 1}/{len(netcdf_file_paths)}"
+                f"{output_netcdf_file_path} already exists! Skippping download ..."
             )
+        else:
+            try:
+                output_netcdf_file_path = download_file_from_url(
+                    url=netcdf_url, output_file_path=output_netcdf_file_path, chunks=100
+                )
+                log.info("Download complete!")
+            except Exception as error:
+                log.exception(error)
+                log.error(f"Failed to download {netcdf_url}")
+                failed_to_download.append(netcdf_url)
 
-            # Get the subdatasets in the netcdf
-            netcdf_subdatasets_uris = get_netcdf_subdatasets_uris(local_netcdf_file)
-            # Filter by required measurements
-            netcdf_subdatasets_uris = {
-                k: v
-                for k, v in netcdf_subdatasets_uris.items()
-                if k in MEASUREMENTS[product_name]
-            }
-            # Check
-            assert len(netcdf_subdatasets_uris) == len(MEASUREMENTS[product_name])
-
-            for var, subdataset_uri in netcdf_subdatasets_uris.items():
-                da = rioxarray.open_rasterio(subdataset_uri).squeeze()
-
-                if "spatial_ref" in list(da.coords):
-                    crs_coord_name = "spatial_ref"
-                elif "crs" in list(da.coords):
-                    crs_coord_name = "crs"
-
-                crs = da.rio.crs
-
-                if crs is None:
-                    # Assumption drawn from product manual is
-                    # data is either in EPSG:4326 or OGC:CRS84
-                    if da.dims[0] in ["y", "lat", "latitude"]:
-                        crs = "EPSG:4326"
-                    elif da.dims[0] in ["x", "lon", "longitude"]:
-                        crs = "OGC:CRS84"
-
-                da = assign_crs(da, crs, crs_coord_name=crs_coord_name)
-
-                # Get attributes to be used in tiled COGs
-                attrs = da.attrs
-                exclude = [
-                    "lon#",
-                    "lat#",
-                    "number_of_regions",
-                    "TileSize",
-                    "NETCDF_",
-                    "coordinates",
-                ]
-                filtered_attrs = {
+        # Tile the downloaded file
+        if check_file_exists(output_netcdf_file_path):
+            log.info(f"Generating cog files for {output_netcdf_file_path}")
+            try:
+                # Get the subdatasets in the netcdf
+                netcdf_subdatasets_uris = get_netcdf_subdatasets_uris(
+                    output_netcdf_file_path
+                )
+                # Filter by required measurements
+                netcdf_subdatasets_uris = {
                     k: v
-                    for k, v in attrs.items()
-                    if not any(sub.lower() in k.lower() for sub in exclude)
+                    for k, v in netcdf_subdatasets_uris.items()
+                    if k in MEASUREMENTS[product_name]
                 }
-                da.attrs = filtered_attrs
+                # Check
+                assert len(netcdf_subdatasets_uris) == len(MEASUREMENTS[product_name])
 
-                # Crop the netcdf subdataset to each tile
-                with tqdm(
-                    iterable=tiles, desc=f"Cropping {var} subdataset", total=len(tiles)
-                ) as tiles:
-                    for tile in tiles:
-                        tile_idx, tile_geobox = tile
-                        output_cog_url = get_output_cog_url(
-                            cog_output_dir, subdataset_uri, tile_idx
-                        )
-                        if not overwrite:
-                            if check_file_exists(output_cog_url):
-                                continue
+                for var, subdataset_uri in netcdf_subdatasets_uris.items():
+                    da = rioxarray.open_rasterio(subdataset_uri).squeeze()
 
-                        cropped_da = da.odc.crop(
-                            tile_geobox.extent.to_crs(da.odc.geobox.crs)
-                        )
+                    if "spatial_ref" in list(da.coords):
+                        crs_coord_name = "spatial_ref"
+                    elif "crs" in list(da.coords):
+                        crs_coord_name = "crs"
 
-                        # Write cog files
-                        if is_local_path(output_cog_url):
-                            cropped_da.odc.write_cog(
-                                fname=output_cog_url,
-                                overwrite=True,
-                                tags=filtered_attrs,
+                    crs = da.rio.crs
+
+                    if crs is None:
+                        # Assumption drawn from product manual is
+                        # data is either in EPSG:4326 or OGC:CRS84
+                        if da.dims[0] in ["y", "lat", "latitude"]:
+                            crs = "EPSG:4326"
+                        elif da.dims[0] in ["x", "lon", "longitude"]:
+                            crs = "OGC:CRS84"
+
+                    da = assign_crs(da, crs, crs_coord_name=crs_coord_name)
+
+                    # Get attributes to be used in tiled COGs
+                    attrs = da.attrs
+                    exclude = [
+                        "lon#",
+                        "lat#",
+                        "number_of_regions",
+                        "TileSize",
+                        "NETCDF_",
+                        "coordinates",
+                    ]
+                    filtered_attrs = {
+                        k: v
+                        for k, v in attrs.items()
+                        if not any(sub.lower() in k.lower() for sub in exclude)
+                    }
+                    da.attrs = filtered_attrs
+
+                    # Crop the netcdf subdataset to each tile
+                    with tqdm(
+                        iterable=tiles,
+                        desc=f"Cropping {var} subdataset",
+                        total=len(tiles),
+                    ) as tiles:
+                        for tile in tiles:
+                            tile_idx, tile_geobox = tile
+                            output_cog_url = get_output_cog_url(
+                                cog_output_dir, subdataset_uri, tile_idx
                             )
-                        else:
-                            cog_bytes = cropped_da.odc.write_cog(
-                                fname=":mem:", overwrite=True, tags=filtered_attrs
-                            )
-                            fs = get_filesystem(output_cog_url, anon=False)
-                            with fs.open(output_cog_url, "wb") as f:
-                                f.write(cog_bytes)
+                            if not overwrite:
+                                if check_file_exists(output_cog_url):
+                                    continue
 
-                log.info(f"Written COGs for {var} subdataset")
-        except Exception as error:
-            log.exception(error)
-            log.error(f"Failed to process netcdf {local_netcdf_file}")
-            failed_to_tile.append(local_netcdf_file)
+                            cropped_da = da.odc.crop(
+                                tile_geobox.extent.to_crs(da.odc.geobox.crs)
+                            )
+
+                            # Write cog files
+                            if is_local_path(output_cog_url):
+                                cropped_da.odc.write_cog(
+                                    fname=output_cog_url,
+                                    overwrite=True,
+                                    tags=filtered_attrs,
+                                )
+                            else:
+                                cog_bytes = cropped_da.odc.write_cog(
+                                    fname=":mem:", overwrite=True, tags=filtered_attrs
+                                )
+                                fs = get_filesystem(output_cog_url, anon=False)
+                                with fs.open(output_cog_url, "wb") as f:
+                                    f.write(cog_bytes)
+
+                            log.info(f"Written COGs for {var} subdataset")
+            except Exception as error:
+                log.exception(error)
+                log.error(
+                    f"Failed to generate cogs for the netcdf {output_netcdf_file_path}"
+                )
+                failed_to_tile.append(output_netcdf_file_path)
+            # Once done remove the file to save on storage in volume
+            os.remove(output_netcdf_file_path)
+            log.info(f"Deleted {output_netcdf_file_path}")
 
     failed_tasks = failed_to_download + failed_to_tile
     if failed_tasks:
