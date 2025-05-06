@@ -103,7 +103,7 @@ def get_output_cog_url(
 
 
 @click.command(
-    "download-cogs",
+    "download-cgls-lwq-cogs",
     help="Download the Copernicus Global Land Service Lake Water Quality datasets,"
     "crop and convert to Cloud Optimized Geotiffs, and push to an S3 bucket.",
     no_args_is_help=True,
