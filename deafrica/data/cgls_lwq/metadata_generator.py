@@ -162,7 +162,6 @@ def get_eo3_dataset_doc_file_path(
     show_default=True,
     help="Whether to write eo3 dataset documents before they are converted to stac.",
 )
-@click.option("-v", "--verbose", default=1, count=True)
 def create_stac_files(
     cogs_dir: str,
     product_yaml: str,
@@ -170,11 +169,10 @@ def create_stac_files(
     overwrite: bool,
     max_parallel_steps: int,
     worker_idx: int,
-    verbose: int,
     write_eo3: bool,
 ):
     # Setup logging level
-    setup_logging(verbose)
+    setup_logging()
     log = logging.getLogger(__name__)
 
     # Find all the geotiffs

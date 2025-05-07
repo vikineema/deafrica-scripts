@@ -173,20 +173,18 @@ def create_and_upload_cog(geotiff_path: str, cog_output_path: str):
     help="Directory to write the cog files to",
 )
 @click.option("--overwrite/--no-overwrite", default=False, show_default=True)
-@click.option("-v", "--verbose", default=1, count=True)
 def download_cogs(
     season,
     product,
     cog_output_dir,
     overwrite,
-    verbose: int,
 ):
     """
     Download the ESA WorldCereal 10 m 2021 v100 products from Zenodo,
     convert to Cloud Optimized Geotiff, and push to an S3 bucket.
     """
     # Setup logging level
-    setup_logging(verbose)
+    setup_logging()
 
     if season not in VALID_SEASONS:
         raise ValueError(f"Invalid season selected: {season}")
