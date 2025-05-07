@@ -140,18 +140,16 @@ def get_output_cog_url(
     type=str,
     help="Filter to select netcdf urls to download cogs for.",
 )
-@click.option("-v", "--verbose", default=1, count=True)
 def download_cogs(
     product_name: str,
     cog_output_dir: str,
     overwrite: bool,
     max_parallel_steps: int,
     worker_idx: int,
-    verbose: int,
     url_filter: str,
 ):
     # Setup logging level
-    setup_logging(verbose)
+    setup_logging()
     log = logging.getLogger(__name__)
 
     if product_name not in MANIFEST_FILE_URLS.keys():
