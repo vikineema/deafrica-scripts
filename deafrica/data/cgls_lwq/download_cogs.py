@@ -202,7 +202,7 @@ def download_cogs(
 
     tiles = get_africa_tiles(grid_res)
 
-    tmp_dir = f"/tmp/{product_name}/netcdfs/"
+    tmp_dir = f"tmp/{product_name}/netcdfs/"
     failed_to_download = []
     failed_to_tile = []
     for netcdf_url in netcdf_urls:
