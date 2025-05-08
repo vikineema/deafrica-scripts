@@ -34,6 +34,8 @@ from deafrica.io import (
 from deafrica.logs import setup_logging
 from deafrica.utils import AFRICA_EXTENT_URL
 
+# Setup logging level
+setup_logging()
 log = logging.getLogger(__name__)
 
 
@@ -183,8 +185,6 @@ def download_cogs(
     Download the ESA WorldCereal 10 m 2021 v100 products from Zenodo,
     convert to Cloud Optimized Geotiff, and push to an S3 bucket.
     """
-    # Setup logging level
-    setup_logging()
 
     if season not in VALID_SEASONS:
         raise ValueError(f"Invalid season selected: {season}")
