@@ -1,6 +1,6 @@
 """
 Prepare eo3 metadata for a Copernicus Global Land Service -
-Lake Water Quality products.
+Lake Water Quality dataset.
 """
 
 import warnings

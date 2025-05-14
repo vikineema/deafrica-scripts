@@ -1,8 +1,9 @@
 """
 Functions to parse info from Copernicus Global Land Service -
-Lake Water Quality products' netcdf files.
+Lake Water Quality NetCDF files.
 """
 
+import logging
 import os
 import posixpath
 import re
@@ -10,9 +11,13 @@ from urllib.parse import urlparse
 
 import rasterio
 import requests
+import rioxarray
+import xarray as xr
 
 from deafrica.data.cgls_lwq.constants import NAMING_PREFIX
 from deafrica.io import is_local_path
+
+log = logging.getLogger(__name__)
 
 
 def parse_netcdf_url(netcdf_url: str) -> tuple[str]:
@@ -174,3 +179,34 @@ def get_netcdf_urls_from_manifest(manifest_file_url: str) -> list[str]:
     assert len(check) == 0
 
     return all_netcdf_urls
+
+
+def read_netcdf_url(netcdf_url: str, max_retries: int = 5) -> xr.Dataset | xr.DataArray:
+    """
+    Read a netcdf url into an xarray object with a retry step.
+
+    Parameters
+    ----------
+    netcdf_url : str
+        File path or URI to the netcdf file to read
+    max_retries : int, optional
+        Maximum number of times to try reading the file, by default 5
+
+    Returns
+    -------
+    xr.Dataset | xr.DataArray
+        Data from the netcdf file.
+    """
+    attempt = 1
+    while True:
+        try:
+            ds = rioxarray.open_rasterio(netcdf_url)
+        except Exception as error:
+            log.error(f"Read attempt {attempt} for {netcdf_url} failed")
+            if attempt == max_retries:
+                log.error("Reached max retry attempts")
+                raise error
+            else:
+                attempt += 1
+        else:
+            return ds

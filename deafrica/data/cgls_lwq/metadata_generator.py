@@ -1,6 +1,6 @@
 """
 Create per dataset metadata (stac files) for the Copernicus Global Land Service -
-Lake Water Quality products.
+Lake Water Quality datasets.
 """
 
 import json
@@ -199,6 +199,7 @@ def create_stac_files(
     log.info(f"Executing worker {worker_idx}")
 
     dataset_paths = task_chunks[worker_idx]
+    log.info(f"Worker {worker_idx} to process {len(dataset_paths)} datasets.")
 
     log.info(f"Generating stac files for {len(all_dataset_paths)} datasets")
     failed_tasks = []
@@ -251,8 +252,12 @@ def create_stac_files(
                 json.dump(stac_item, f, indent=2)  # `indent=4` makes it human-readable
         except Exception as error:
             log.exception(error)
-            log.error(f"Failed to generate metedata file for dataset {dataset_path}")
-            failed_tasks.append(dataset_path)
+            log.error(
+                f"Failed to generate metedata file for the dataset {dataset_path}"
+            )
+            failed_tasks.append(
+                f"Failed to generate metedata file for the dataset {dataset_path}"
+            )
 
     if failed_tasks:
         failed_tasks_json_array = json.dumps(failed_tasks)
