@@ -15,6 +15,7 @@ VALID_PRODUCTS = [
     "temporarycrops",
     "wintercereals",
 ]
+NO_CONFIDENCE_PRODUCTS = ["activecropland"]
 VALID_ODC_PRODUCT_NAMES = [
     "esa_worldcereal_activecropland",
     "esa_worldcereal_maize",

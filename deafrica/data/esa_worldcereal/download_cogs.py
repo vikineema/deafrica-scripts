@@ -17,6 +17,7 @@ from odc.aws import s3_dump
 
 from deafrica.data.esa_worldcereal.constants import (
     LOCAL_DOWNLOAD_DIR,
+    NO_CONFIDENCE_PRODUCTS,
     VALID_PRODUCTS,
     VALID_SEASONS,
     VALID_YEAR,
@@ -34,7 +35,6 @@ from deafrica.io import (
 from deafrica.logs import setup_logging
 from deafrica.utils import AFRICA_EXTENT_URL
 
-# Setup logging level
 setup_logging()
 log = logging.getLogger(__name__)
 
@@ -185,7 +185,6 @@ def download_cogs(
     Download the ESA WorldCereal 10 m 2021 v100 products from Zenodo,
     convert to Cloud Optimized Geotiff, and push to an S3 bucket.
     """
-
     if season not in VALID_SEASONS:
         raise ValueError(f"Invalid season selected: {season}")
 
@@ -222,32 +221,33 @@ def download_cogs(
 
         create_and_upload_cog(local_classification_geotiff, output_cog_path)
 
-    # Download the confidence geotiffs for the product
-    confidence_zip_url = f"https://zenodo.org/records/7875105/files/WorldCereal_{VALID_YEAR}_{season}_{product}_confidence.zip?download=1"
+    if product not in NO_CONFIDENCE_PRODUCTS:
+        # Download the confidence geotiffs for the product
+        confidence_zip_url = f"https://zenodo.org/records/7875105/files/WorldCereal_{VALID_YEAR}_{season}_{product}_confidence.zip?download=1"
 
-    local_confidence_geotiffs = download_and_unzip_data(confidence_zip_url)
+        local_confidence_geotiffs = download_and_unzip_data(confidence_zip_url)
 
-    log.info("Processing confidence geotiffs")
-    for idx, local_confidence_geotiff in enumerate(local_confidence_geotiffs):
-        log.info(
-            f"Processing geotiff {local_confidence_geotiff} {idx + 1}/{len(local_confidence_geotiff)}"
-        )
-        filename = os.path.basename(local_confidence_geotiff)
-        aez_id, _, _, startdate, enddate, band_name = parse_geotiff_url(
-            local_confidence_geotiff
-        )
+        log.info("Processing confidence geotiffs")
+        for idx, local_confidence_geotiff in enumerate(local_confidence_geotiffs):
+            log.info(
+                f"Processing geotiff {local_confidence_geotiff} {idx + 1}/{len(local_confidence_geotiffs)}"
+            )
+            filename = os.path.basename(local_confidence_geotiff)
+            aez_id, _, _, startdate, enddate, band_name = parse_geotiff_url(
+                local_confidence_geotiff
+            )
 
-        output_cog_parent_dir = join_url(
-            cog_output_dir, product, season, aez_id, VALID_YEAR
-        )
-        output_cog_path = join_url(output_cog_parent_dir, filename)
-        if not overwrite:
-            if check_file_exists(output_cog_path):
-                log.info(f"{output_cog_path} exists! Skipping ...")
-                continue
+            output_cog_parent_dir = join_url(
+                cog_output_dir, product, season, aez_id, VALID_YEAR
+            )
+            output_cog_path = join_url(output_cog_parent_dir, filename)
+            if not overwrite:
+                if check_file_exists(output_cog_path):
+                    log.info(f"{output_cog_path} exists! Skipping ...")
+                    continue
 
-        if not check_directory_exists(output_cog_parent_dir):
-            fs = get_filesystem(output_cog_parent_dir, anon=False)
-            fs.makedirs(output_cog_parent_dir, exist_ok=True)
+            if not check_directory_exists(output_cog_parent_dir):
+                fs = get_filesystem(output_cog_parent_dir, anon=False)
+                fs.makedirs(output_cog_parent_dir, exist_ok=True)
 
-        create_and_upload_cog(local_confidence_geotiff, output_cog_path)
+            create_and_upload_cog(local_confidence_geotiff, output_cog_path)
