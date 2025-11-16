@@ -32,7 +32,6 @@ def get_africa_tiles(grid_res: int | float) -> list:
 
     gridspec = GridSpec(
         crs=CRS("EPSG:6933"),
-        #
         tile_shape=tile_shape,
         resolution=Resolution(y=-grid_res, x=grid_res),
         origin=XY(y=-7392000, x=-17376000),
@@ -51,14 +50,14 @@ def get_africa_tiles(grid_res: int | float) -> list:
 def get_region_code(tile_id: tuple[int, int], sep: str = "") -> str:
     """
     Get the region code for a tile from its tile ID in the format
-    format "x{x:03d}{sep}y{y:03d}".
+    "x{x:03d}{sep}y{y:03d}".
 
     Parameters
     ----------
     tile_id : tuple[int, int]
         Tile ID for the tile.
     sep : str, optional
-        Seperator between the x and y parts of the region code, by
+        Separator between the x and y parts of the region code, by
         default ""
 
     Returns
@@ -67,6 +66,5 @@ def get_region_code(tile_id: tuple[int, int], sep: str = "") -> str:
         Region code for the input tile ID.
     """
     x, y = tile_id
-    region_code_format = "x{x:03d}{sep}y{y:03d}"
-    region_code = region_code_format.format(x=x, y=y, sep=sep)
+    region_code = f"x{x:03d}{sep}y{y:03d}"
     return region_code
